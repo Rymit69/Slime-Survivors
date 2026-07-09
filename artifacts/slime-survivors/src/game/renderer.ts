@@ -80,10 +80,10 @@ function renderLake(ctx: CanvasRenderingContext2D, lake: Lake) {
       const top = gy === 0, bottom = gy === H - 1;
       const left = gx === 0, right = gx === W - 1;
 
-      if      (top    && left)  drawTile(ctx, 'water_corner', px, py,  Math.PI / 2,  false, false); // NW
-      else if (top    && right) drawTile(ctx, 'water_corner', px, py,  Math.PI,      false, false); // NE
-      else if (bottom && left)  drawTile(ctx, 'water_corner', px, py,  0,            false, false); // SW
-      else if (bottom && right) drawTile(ctx, 'water_corner', px, py, -Math.PI / 2,  false, false); // SE
+      if      (top    && left)  drawTile(ctx, 'water_corner', px, py,  Math.PI,      false, false); // NW
+      else if (top    && right) drawTile(ctx, 'water_corner', px, py, -Math.PI / 2,  false, false); // NE
+      else if (bottom && left)  drawTile(ctx, 'water_corner', px, py,  Math.PI / 2,  false, false); // SW
+      else if (bottom && right) drawTile(ctx, 'water_corner', px, py,  0,            false, false); // SE
       else if (left)   drawTile(ctx, 'water_side', px, py,  0,             false, false); // W
       else if (right)  drawTile(ctx, 'water_side', px, py,  Math.PI,       false, false); // E
       else if (top)    drawTile(ctx, 'water_side', px, py,  Math.PI / 2,   false, false); // N
