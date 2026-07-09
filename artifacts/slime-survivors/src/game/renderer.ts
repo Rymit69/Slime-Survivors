@@ -111,16 +111,25 @@ export function render(
     sy = (Math.random() - 0.5) * 8;
   }
 
-  ctx.save();
-  ctx.translate(-state.camera.x + width / 2 + sx, -state.camera.y + height / 2 + sy);
+  // ── Mobile zoom-out ─────────────────────────────────────────────────────────
+  // On narrow screens show more world; caps at 1.0 on desktop
+  const zoom = Math.min(1.0, width / 520);
 
-  // ── 1. Grass tiles ──────────────────────────────────────────────────────────
+  ctx.save();
+  ctx.translate(width / 2 + sx, height / 2 + sy);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-state.camera.x, -state.camera.y);
+
+  // ── 1. Grass tiles + flowers ─────────────────────────────────────────────────
   const S = TILE_SIZE;
-  const startCol = Math.floor((state.camera.x - width / 2) / S) - 1;
-  const endCol   = startCol + Math.ceil(width / S) + 2;
-  const startRow = Math.floor((state.camera.y - height / 2) / S) - 1;
-  const endRow   = startRow + Math.ceil(height / S) + 2;
-  const grassImg = sp('grass');
+  const halfW = width  / (2 * zoom);
+  const halfH = height / (2 * zoom);
+  const startCol = Math.floor((state.camera.x - halfW) / S) - 1;
+  const endCol   = startCol + Math.ceil(width  / (S * zoom)) + 2;
+  const startRow = Math.floor((state.camera.y - halfH) / S) - 1;
+  const endRow   = startRow + Math.ceil(height / (S * zoom)) + 2;
+  const grassImg  = sp('grass');
+  const flowerImgs = [sp('flower1'), sp('flower2'), sp('flower3')];
 
   for (let c = startCol; c <= endCol; c++) {
     for (let r = startRow; r <= endRow; r++) {
@@ -131,6 +140,15 @@ export function render(
         const rand = seed - Math.floor(seed);
         ctx.fillStyle = rand < 0.3 ? '#4a7c59' : rand < 0.6 ? '#3d6b4a' : '#5a8c69';
         ctx.fillRect(c * S, r * S, S, S);
+      }
+
+      // Deterministic flower decoration (~9% of tiles get a flower)
+      const h = Math.sin(c * 127.1 + r * 311.7) * 43758.5453;
+      const hf = h - Math.floor(h);
+      if (hf < 0.09) {
+        const fi = Math.floor(hf * 33.3) % 3; // 0,1,2
+        const img = flowerImgs[fi];
+        if (img) ctx.drawImage(img, c * S, r * S, S, S);
       }
     }
   }

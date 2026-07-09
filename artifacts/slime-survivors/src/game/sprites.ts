@@ -24,6 +24,9 @@ const SPRITE_MAP: Record<string, string> = {
   water:           '/sprites/water.png',
   apple_tree:      '/sprites/apple_tree.png',
   apple:           '/sprites/apple.png',
+  flower1:         '/sprites/flower1.png',
+  flower2:         '/sprites/flower2.png',
+  flower3:         '/sprites/flower3.png',
 };
 
 export function loadSprites(base: string = ''): Promise<void> {
