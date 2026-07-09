@@ -286,10 +286,6 @@ export function render(
     if (!inView) continue;
     const miniKey = `slime_mini_${clone.heroType}`;
     drawSprite(ctx, miniKey, clone.x, clone.y, 28, 28, clone.facingLeft);
-    // HP bar
-    const hpPct = Math.max(0, clone.currentHP / clone.maxHP);
-    ctx.fillStyle = '#550000'; ctx.fillRect(clone.x - 12, clone.y - 20, 24, 4);
-    ctx.fillStyle = '#00ff88'; ctx.fillRect(clone.x - 12, clone.y - 20, 24 * hpPct, 4);
   }
 
   // ── 10. Player ──────────────────────────────────────────────────────────────

@@ -565,23 +565,21 @@ function generateUpgrades(): UpgradeOptions[] {
     }},
     { id: 'split',    label: t('upgSplit'),   apply: s => {
       s.player.currentHP = Math.max(1, s.player.currentHP * 0.75);
-      // Only one mini clone at a time
-      if (s.miniClones.length === 0) {
-        const clone: MiniClone = {
-          id: Math.random().toString(),
-          x: s.player.x + 60,
-          y: s.player.y,
-          heroType: s.player.heroType,
-          maxHP: s.player.maxHP * 0.25,
-          currentHP: s.player.maxHP * 0.25,
-          size: Math.max(6, s.player.size * 0.5),
-          speed: s.player.speed,
-          vx: 0, vy: 0,
-          animFrame: 0, animTimer: 0, facingLeft: false,
-          weaponCooldown: 0,
-        };
-        s.miniClones.push(clone);
-      }
+      const angle = (s.miniClones.length * Math.PI * 0.4) + Math.random() * 0.5;
+      const clone: MiniClone = {
+        id: Math.random().toString(),
+        x: s.player.x + Math.cos(angle) * 70,
+        y: s.player.y + Math.sin(angle) * 70,
+        heroType: s.player.heroType,
+        maxHP: s.player.maxHP * 0.25,
+        currentHP: s.player.maxHP * 0.25,
+        size: Math.max(6, s.player.size * 0.5),
+        speed: s.player.speed,
+        vx: 0, vy: 0,
+        animFrame: 0, animTimer: 0, facingLeft: false,
+        weaponCooldown: 0,
+      };
+      s.miniClones.push(clone);
     }},
   ];
   if (!State.unlockedWeapons.includes(2) && State.level >= 5)
