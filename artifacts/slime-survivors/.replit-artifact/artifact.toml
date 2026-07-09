@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Slime Survivors"
+version = "1.0.0"
+id = "artifacts/slime-survivors"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24653
+
+[services.development]
+run = "pnpm --filter @workspace/slime-survivors run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/slime-survivors", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/slime-survivors/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24653"
+BASE_PATH = "/"
