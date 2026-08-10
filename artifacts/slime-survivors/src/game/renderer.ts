@@ -142,10 +142,10 @@ export function render(
         ctx.fillRect(c * S, r * S, S, S);
       }
 
-      // Deterministic flower decoration (~9% of tiles get a flower)
+      // Deterministic flower decoration (~2.5% of tiles get a flower)
       const h = Math.sin(c * 127.1 + r * 311.7) * 43758.5453;
       const hf = h - Math.floor(h);
-      if (hf < 0.09) {
+      if (hf < 0.025) {
         const fi = Math.floor(hf * 33.3) % 3; // 0,1,2
         const img = flowerImgs[fi];
         if (img) ctx.drawImage(img, c * S, r * S, S, S);

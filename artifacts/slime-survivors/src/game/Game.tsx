@@ -135,6 +135,11 @@ const BtnSecondary: React.CSSProperties = {
   background: 'rgba(255,255,255,0.08)', border: '2px solid rgba(100,160,255,0.35)',
   color: '#a8d4ff',
 };
+const VolumeButton: React.CSSProperties = {
+  width: 52, height: 46, borderRadius: 12, fontSize: '1.8rem',
+  lineHeight: 1, background: 'rgba(255,255,255,0.08)',
+  border: '2px solid rgba(100,160,255,0.3)', color: '#a8d4ff',
+};
 
 // ─── Main Game Component ──────────────────────────────────────────────────────
 export function Game() {
@@ -148,6 +153,7 @@ export function Game() {
   const [hero, setHero] = useState<HeroType>('blue');
   const [spritesReady, setSpritesReady] = useState(false);
   const [musicVol, setMusicVol] = useState(0.5);
+  const [pauseSettingsOpen, setPauseSettingsOpen] = useState(false);
 
   // Background music
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -217,7 +223,7 @@ export function Game() {
 
   const onStartGame = (d: Difficulty) => { setDifficulty(d); setScreen('HERO'); };
   const onPickHero  = (h: HeroType)   => { setHero(h); tryPlayMusic(); setScreen('GAME'); };
-  const onGoMenu    = () => setScreen('MENU');
+  const onGoMenu    = () => { setPauseSettingsOpen(false); setScreen('MENU'); };
 
   const onUpgrade = (upgrade: UpgradeOptions) => {
     upgrade.apply(State);
@@ -239,7 +245,11 @@ export function Game() {
   const onPlayAgain = () => { setScreen('MENU'); setTimeout(() => setScreen('DIFFICULTY'), 10); };
 
   const onPause  = () => { stopGameLoop(); State.status = 'PAUSED'; setGameStatus('PAUSED'); };
-  const onResume = () => { setGameStatus('PLAYING'); if (canvasRef.current) resumeGameLoop(canvasRef.current, handleStateChange); };
+  const onResume = () => {
+    setPauseSettingsOpen(false);
+    setGameStatus('PLAYING');
+    if (canvasRef.current) resumeGameLoop(canvasRef.current, handleStateChange);
+  };
 
   useEffect(() => {
     if (screen !== 'GAME') return;
@@ -273,12 +283,24 @@ export function Game() {
       </h1>
       <div className="flex flex-col gap-4 w-full px-8" style={{ maxWidth: 340 }}>
         <button onClick={() => { tryPlayMusic(); setScreen('DIFFICULTY'); }}
-          className="font-mono font-black tracking-widest text-white transition-all active:scale-95" style={BtnPrimary}>
-          {t('start')}
+          className="transition-all active:scale-95 flex items-center justify-center"
+          style={{ background:'transparent', border:0, padding:0, height:112 }}
+          aria-label={t('start')}>
+          <img
+            src={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/ui/${lang === 'ru' ? 'start-ru' : 'start-en'}.png`}
+            alt={t('start')} draggable={false}
+            style={{ width:170, height:112, objectFit:'contain', imageRendering:'pixelated' }}
+          />
         </button>
         <button onClick={() => setScreen('SETTINGS')}
-          className="font-mono font-bold tracking-widest transition-all active:scale-95" style={BtnSecondary}>
-          {t('settings')}
+          className="transition-all active:scale-95 flex items-center justify-center"
+          style={{ background:'transparent', border:0, padding:0, height:112 }}
+          aria-label={t('settings')}>
+          <img
+            src={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/ui/${lang === 'ru' ? 'settings-ru' : 'settings-en'}.png`}
+            alt={t('settings')} draggable={false}
+            style={{ width:170, height:112, objectFit:'contain', imageRendering:'pixelated' }}
+          />
         </button>
       </div>
       <p className="mt-8 font-mono text-center px-6 opacity-40"
@@ -383,25 +405,21 @@ export function Game() {
           <p className="font-mono font-bold tracking-widest" style={{ color:'#a8d4ff', fontSize:'clamp(0.8rem,3vw,1rem)' }}>
             {t('musicVol')}: {Math.round(musicVol * 100)}%
           </p>
-          <div className="flex gap-3">
-            <button onClick={() => setMusicVol(v => Math.max(0, parseFloat((v - 0.1).toFixed(1))))}
-              className="font-mono font-bold tracking-widest transition-all active:scale-95"
-              style={{ flex:1, padding:'11px 0', borderRadius:12, fontSize:'0.9rem',
-                background:'rgba(255,255,255,0.08)', border:'2px solid rgba(100,160,255,0.25)', color:'#7ec8ff' }}>
-              {t('volDown')}
-            </button>
-            <button onClick={() => setMusicVol(v => Math.min(1, parseFloat((v + 0.1).toFixed(1))))}
-              className="font-mono font-bold tracking-widest transition-all active:scale-95"
-              style={{ flex:1, padding:'11px 0', borderRadius:12, fontSize:'0.9rem',
-                background:'rgba(255,255,255,0.08)', border:'2px solid rgba(100,160,255,0.25)', color:'#7ec8ff' }}>
-              {t('volUp')}
-            </button>
+            <div className="flex items-center gap-4">
+              <button onClick={() => setMusicVol(v => Math.max(0, parseFloat((v - 0.1).toFixed(1))))}
+                className="font-mono font-black transition-all active:scale-90"
+                style={VolumeButton} aria-label={t('volDown')}>−</button>
+              <span className="font-mono font-black text-center" style={{ minWidth:58, color:'#fff', fontSize:'1.15rem' }}>
+                {Math.round(musicVol * 100)}%
+              </span>
+              <button onClick={() => setMusicVol(v => Math.min(1, parseFloat((v + 0.1).toFixed(1))))}
+                className="font-mono font-black transition-all active:scale-90"
+                style={VolumeButton} aria-label={t('volUp')}>+</button>
+            </div>
+            <div style={{ width:'100%', height:7, borderRadius:4, background:'rgba(255,255,255,0.1)', overflow:'hidden' }}>
+              <div style={{ width:`${musicVol*100}%`, height:'100%', borderRadius:4, background:'linear-gradient(90deg,#2f80ed,#7ec8ff)', transition:'width 0.15s' }} />
+            </div>
           </div>
-          {/* Volume bar */}
-          <div style={{ width:'100%', height:6, borderRadius:3, background:'rgba(255,255,255,0.1)' }}>
-            <div style={{ width:`${musicVol*100}%`, height:'100%', borderRadius:3, background:'#4488ff', transition:'width 0.15s' }} />
-          </div>
-        </div>
       </div>
       <button onClick={() => setScreen('MENU')} className="mt-8 font-mono font-bold tracking-widest transition-all active:scale-95" style={{ ...BtnSecondary, padding:'13px 40px' }}>
         ← {t('back')}
@@ -503,7 +521,65 @@ export function Game() {
             <button onClick={onGoMenu} className="font-mono font-bold tracking-widest transition-all active:scale-95" style={BtnSecondary}>
               {t('mainMenu')}
             </button>
+            <button onClick={() => setPauseSettingsOpen(true)}
+              className="font-mono font-bold tracking-widest transition-all active:scale-95"
+              style={{ ...BtnSecondary, padding:'11px 0' }}>
+              ⚙ {t('settings')}
+            </button>
           </div>
+
+          {pauseSettingsOpen && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center select-none overflow-y-auto"
+              style={{ background:'rgba(5,15,40,0.98)', backdropFilter:'blur(6px)' }}>
+              <h2 className="font-mono font-black tracking-widest mb-6"
+                style={{ fontSize:'clamp(1.4rem,6vw,2.1rem)', color:'#7ec8ff', textShadow:'0 3px 0 #0d3b6e' }}>
+                ⚙ {t('settings')}
+              </h2>
+              <div className="flex flex-col gap-6 w-full px-8 rounded-2xl py-8"
+                style={{ maxWidth:340, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(100,160,255,0.2)' }}>
+                <div className="flex flex-col items-center gap-3">
+                  <p className="font-mono font-bold tracking-widest" style={{ color:'#a8d4ff', fontSize:'0.9rem' }}>
+                    {t('language')}
+                  </p>
+                  <div className="flex gap-3">
+                    {(['ru','en'] as Lang[]).map(l => (
+                      <button key={l} onClick={() => changeLang(l)}
+                        className="font-mono font-black tracking-widest transition-all active:scale-95"
+                        style={{ width:90, padding:'12px 0', borderRadius:12, fontSize:'1rem',
+                          background: lang===l ? 'linear-gradient(180deg,#2f80ed 0%,#1a55c0 100%)' : 'rgba(255,255,255,0.08)',
+                          border: lang===l ? '3px solid #0f3a9a' : '2px solid rgba(100,160,255,0.25)',
+                          color: lang===l ? '#fff' : '#7ec8ff',
+                          boxShadow: lang===l ? '0 4px 0 #0a2a6e' : '0 2px 0 rgba(0,0,0,0.3)' }}>
+                        {l==='ru' ? '🇷🇺 RU' : '🇬🇧 EN'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex flex-col items-center gap-3">
+                  <p className="font-mono font-bold tracking-widest" style={{ color:'#a8d4ff', fontSize:'0.9rem' }}>
+                    {t('musicVol')}
+                  </p>
+                  <div className="flex items-center gap-4">
+                    <button onClick={() => setMusicVol(v => Math.max(0, parseFloat((v - 0.1).toFixed(1))))}
+                      className="font-mono font-black transition-all active:scale-90" style={VolumeButton} aria-label={t('volDown')}>−</button>
+                    <span className="font-mono font-black text-center" style={{ minWidth:58, color:'#fff', fontSize:'1.15rem' }}>
+                      {Math.round(musicVol * 100)}%
+                    </span>
+                    <button onClick={() => setMusicVol(v => Math.min(1, parseFloat((v + 0.1).toFixed(1))))}
+                      className="font-mono font-black transition-all active:scale-90" style={VolumeButton} aria-label={t('volUp')}>+</button>
+                  </div>
+                  <div style={{ width:'100%', height:7, borderRadius:4, background:'rgba(255,255,255,0.1)', overflow:'hidden' }}>
+                    <div style={{ width:`${musicVol*100}%`, height:'100%', borderRadius:4, background:'linear-gradient(90deg,#2f80ed,#7ec8ff)', transition:'width 0.15s' }} />
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setPauseSettingsOpen(false)}
+                className="mt-8 font-mono font-bold tracking-widest transition-all active:scale-95"
+                style={{ ...BtnSecondary, padding:'13px 40px' }}>
+                ← {t('back')}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
