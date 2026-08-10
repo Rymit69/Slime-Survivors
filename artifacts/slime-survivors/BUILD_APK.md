@@ -25,7 +25,7 @@ pnpm vite build --config vite.capacitor.config.ts
 
 ```bash
 cd artifacts/slime-survivors
-npx cap add android
+pnpm exec cap add android
 ```
 
 Это создаст папку `android/` со всем нужным проектом для Android Studio.
@@ -36,7 +36,7 @@ npx cap add android
 
 ```bash
 cd artifacts/slime-survivors
-npx cap sync android
+pnpm exec cap sync android
 ```
 
 Запускай эту команду каждый раз после `pnpm vite build`.
@@ -46,7 +46,7 @@ npx cap sync android
 ## Шаг 4 — Открыть в Android Studio
 
 ```bash
-npx cap open android
+pnpm exec cap open android
 ```
 
 Откроется Android Studio. Дождись, пока Gradle синхронизируется.

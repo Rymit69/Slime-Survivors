@@ -48,3 +48,6 @@ Thumbs.db
 .cache/
 .local/
 attached_assets/
+
+# Capacitor native project is generated in CI
+artifacts/slime-survivors/android/

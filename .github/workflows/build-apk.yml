@@ -12,7 +12,7 @@ jobs:
     steps:
       # 1. Получить код
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # 2. Настроить Node.js + pnpm
       - name: Setup pnpm
@@ -21,9 +21,9 @@ jobs:
           version: 10
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       # 3. Настроить Java 17 (нужен для Gradle)
@@ -35,7 +35,7 @@ jobs:
 
       # 4. Установить зависимости
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       # 5. Собрать веб-приложение (base: './')
       - name: Build web app
@@ -44,12 +44,12 @@ jobs:
       # 6. Добавить Android-платформу Capacitor
       - name: Capacitor add android
         working-directory: artifacts/slime-survivors
-        run: npx cap add android
+        run: pnpm exec cap add android
 
       # 7. Синхронизировать сборку с Android
       - name: Capacitor sync
         working-directory: artifacts/slime-survivors
-        run: npx cap sync android
+        run: pnpm exec cap sync android
 
       # 8. Выдать права на Gradle wrapper
       - name: Make Gradle executable
@@ -63,7 +63,7 @@ jobs:
 
       # 10. Загрузить APK как артефакт (скачать прямо с GitHub)
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: slime-survivors-debug
           path: artifacts/slime-survivors/android/app/build/outputs/apk/debug/app-debug.apk
