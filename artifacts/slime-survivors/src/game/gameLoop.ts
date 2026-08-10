@@ -16,8 +16,9 @@ const BASE_SIZE = 20;
 const ANIM_SPEED = 0.2;
 
 // ── Difficulty helpers ───────────────────────────────────────────────────────
-function diffDivisor(d: Difficulty) { return d === 'easy' ? 3 : d === 'medium' ? 2 : 1; }
-function maxEnemies(d: Difficulty)  { return d === 'easy' ? 20 : d === 'medium' ? 35 : 60; }
+// Enemy spawn rate is measured relative to Easy: 1× / 2× / 3×.
+function diffMultiplier(d: Difficulty) { return d === 'easy' ? 1 : d === 'medium' ? 2 : 3; }
+function maxEnemies(d: Difficulty)  { return d === 'easy' ? 20 : d === 'medium' ? 40 : 60; }
 
 // ── Hero projectile color ────────────────────────────────────────────────────
 export function heroColor(h: HeroType): string {
@@ -267,14 +268,14 @@ function update(
   // ── 2. Spawn enemies ────────────────────────────────────────────────────────
   State.lastEnemySpawnTime += dt;
   const spawnInterval = Math.max(1.5, 5 - State.timeSurvived / 60);
-  const div = diffDivisor(State.difficulty);
+  const spawnMultiplier = diffMultiplier(State.difficulty);
   const cap = maxEnemies(State.difficulty);
 
-  if (State.lastEnemySpawnTime >= spawnInterval && State.enemies.length < cap) {
+  if (State.lastEnemySpawnTime >= spawnInterval / spawnMultiplier && State.enemies.length < cap) {
     State.lastEnemySpawnTime = 0;
     const waveMult = 1 + Math.floor(State.timeSurvived / 30);
     const earlyBoost = Math.max(1, 3 - State.timeSurvived / 60);
-    const count = Math.max(1, Math.floor((2 + waveMult) / div * earlyBoost));
+    const count = Math.max(1, Math.floor((2 + waveMult) * earlyBoost));
 
     const canBat      = State.level < 8;
     const canGoblin   = State.level >= 3 && State.level < 15;

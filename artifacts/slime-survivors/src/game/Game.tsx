@@ -281,25 +281,25 @@ export function Game() {
         style={{ fontSize:'clamp(1.4rem,6vw,2.5rem)', color:'#4488ff', textShadow:'0 3px 0 #0d2d6e', letterSpacing:'0.12em' }}>
         SURVIVORS
       </h1>
-      <div className="flex flex-col gap-4 w-full px-8" style={{ maxWidth: 340 }}>
+      <div className="flex flex-col gap-2 w-full px-6" style={{ maxWidth: 390 }}>
         <button onClick={() => { tryPlayMusic(); setScreen('DIFFICULTY'); }}
           className="transition-all active:scale-95 flex items-center justify-center"
-          style={{ background:'transparent', border:0, padding:0, height:112 }}
+          style={{ background:'transparent', border:0, padding:0, height:'clamp(128px,34vw,150px)' }}
           aria-label={t('start')}>
           <img
             src={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/ui/${lang === 'ru' ? 'start-ru' : 'start-en'}.png`}
             alt={t('start')} draggable={false}
-            style={{ width:170, height:112, objectFit:'contain', imageRendering:'pixelated' }}
+            style={{ width:'clamp(205px,62vw,240px)', height:'clamp(128px,34vw,150px)', objectFit:'contain', imageRendering:'pixelated' }}
           />
         </button>
         <button onClick={() => setScreen('SETTINGS')}
           className="transition-all active:scale-95 flex items-center justify-center"
-          style={{ background:'transparent', border:0, padding:0, height:112 }}
+          style={{ background:'transparent', border:0, padding:0, height:'clamp(128px,34vw,150px)' }}
           aria-label={t('settings')}>
           <img
             src={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/ui/${lang === 'ru' ? 'settings-ru' : 'settings-en'}.png`}
             alt={t('settings')} draggable={false}
-            style={{ width:170, height:112, objectFit:'contain', imageRendering:'pixelated' }}
+            style={{ width:'clamp(205px,62vw,240px)', height:'clamp(128px,34vw,150px)', objectFit:'contain', imageRendering:'pixelated' }}
           />
         </button>
       </div>

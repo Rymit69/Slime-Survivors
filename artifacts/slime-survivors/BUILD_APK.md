@@ -4,7 +4,7 @@
 
 - **Node.js 18+** и **pnpm** (`npm i -g pnpm`)
 - **Android Studio** с Android SDK (API 22+)
-- **Java JDK 17** (`java -version` должен показать 17)
+- **Java JDK 21** (`java -version` должен показать 21; Capacitor 8 требует Java 21)
 - Переменная окружения `ANDROID_HOME` указывает на папку SDK
 
 ---
