@@ -55,6 +55,56 @@ function drawSprite(
   ctx.restore();
 }
 
+function drawRotatedSprite(
+  ctx: CanvasRenderingContext2D,
+  key: string,
+  cx: number,
+  cy: number,
+  size: number,
+  rotation: number,
+) {
+  const img = sp(key);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotation);
+  if (img) {
+    ctx.drawImage(img, -size / 2, -size / 2, size, size);
+  }
+  ctx.restore();
+}
+
+function renderChestNavigation(ctx: CanvasRenderingContext2D, state: GameState) {
+  const target = state.chests
+    .filter(chest => !chest.opened)
+    .sort((a, b) =>
+      Math.hypot(a.x - state.player.x, a.y - state.player.y) -
+      Math.hypot(b.x - state.player.x, b.y - state.player.y),
+    )[0];
+  if (!target) return;
+
+  const dx = target.x - state.player.x;
+  const dy = target.y - state.player.y;
+  const distance = Math.hypot(dx, dy);
+  const chestRadius = TILE_SIZE * 10;
+  const time = Date.now();
+
+  if (distance > chestRadius) {
+    // The direction is intentionally shown without a line: the arrow itself
+    // points along the invisible route to the nearest unopened chest.
+    const angle = Math.atan2(dy, dx);
+    const wobble = Math.sin(time / 180) * 0.18;
+    const bob = Math.sin(time / 220) * 4;
+    const arrowX = state.player.x;
+    const arrowY = state.player.y - 58 + bob;
+    drawRotatedSprite(ctx, 'chest_arrow', arrowX, arrowY, 38, angle + Math.PI / 2 + wobble);
+  } else {
+    // Once the chest is close, keep the pointer anchored above it instead of
+    // rotating it around the player.
+    const bob = Math.sin(time / 260) * 3;
+    drawRotatedSprite(ctx, 'chest_arrow', target.x, target.y - 50 + bob, 38, 0);
+  }
+}
+
 // ── Lake tile renderer ───────────────────────────────────────────────────────
 // water_corner base orientation: grass at SW (bottom-left)
 // water_side   base orientation: grass at W (left)
@@ -205,20 +255,9 @@ export function render(
     const inView = Math.abs(chest.x - state.camera.x) < width / 2 + 60 &&
                    Math.abs(chest.y - state.camera.y) < height / 2 + 60;
     if (!inView) continue;
-    ctx.save();
-    ctx.translate(chest.x, chest.y);
-    ctx.fillStyle = '#8B6914'; ctx.fillRect(-16, -10, 32, 22);
-    ctx.fillStyle = '#C8960A'; ctx.fillRect(-16, -18, 32, 12);
-    ctx.fillStyle = '#FFD700'; ctx.fillRect(-4, -13, 8, 8);
-    ctx.strokeStyle = '#5a3a00'; ctx.lineWidth = 2;
-    ctx.strokeRect(-16, -18, 32, 12);
-    ctx.strokeRect(-16, -10, 32, 22);
-    ctx.fillStyle = '#FFD700';
-    ctx.font = 'bold 14px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('✦', 0, -24);
-    ctx.restore();
+    drawSprite(ctx, 'chest', chest.x, chest.y, 54, 54);
   }
+  renderChestNavigation(ctx, state);
 
   // ── 7. XP Orbs ──────────────────────────────────────────────────────────────
   for (const orb of state.xpOrbs) {

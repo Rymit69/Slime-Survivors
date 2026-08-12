@@ -1,4 +1,4 @@
-const CACHE = 'slime-survivors-v2';
+const CACHE = 'slime-survivors-v3';
 
 // On install: pre-cache the shell
 self.addEventListener('install', e => {

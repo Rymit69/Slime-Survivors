@@ -98,10 +98,15 @@ function Joystick() {
 }
 
 // ─── Slime icon (uses real sprite) ───────────────────────────────────────────
+function assetUrl(path: string) {
+  const base = import.meta.env.BASE_URL?.replace(/\/$/, '') ?? '';
+  return `${base}${path}`;
+}
+
 function SlimeIcon({ hero = 'blue', size = 80 }: { hero?: HeroType; size?: number }) {
-  const src = hero === 'green'  ? '/sprites/slime_green1.png' :
+  const src = assetUrl(hero === 'green'  ? '/sprites/slime_green1.png' :
               hero === 'purple' ? '/sprites/slime_purple1.png' :
-                                  '/sprites/slime1.png';
+                                  '/sprites/slime1.png');
   return (
     <div className="animate-bounce" style={{ width: size, height: size }}>
       <img src={src} alt="slime" style={{ width: size, height: size, imageRendering: 'pixelated' }} />
@@ -141,6 +146,76 @@ const VolumeButton: React.CSSProperties = {
   border: '2px solid rgba(100,160,255,0.3)', color: '#a8d4ff',
 };
 
+type InfoData = { title: string; description: string };
+
+function InfoButton({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+      aria-label={label}
+      className="absolute flex items-center justify-center font-mono font-black transition-all active:scale-90"
+      style={{
+        top: 8, right: 8, width: 32, height: 32, borderRadius: '50%',
+        background: 'rgba(5,15,40,0.72)', border: '2px solid rgba(190,225,255,0.7)',
+        color: '#fff', fontSize: '1.1rem', lineHeight: 1, zIndex: 2,
+      }}
+    >
+      !
+    </button>
+  );
+}
+
+function InfoModal({ info, onClose }: { info: InfoData | null; onClose: () => void }) {
+  if (!info) return null;
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center p-6 select-none"
+      style={{ zIndex: 100, background: 'rgba(2,8,25,0.82)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={info.title}
+        className="relative w-full rounded-2xl px-6 py-6 text-center font-mono"
+        style={{
+          maxWidth: 330, background: 'linear-gradient(160deg,#1a376d,#0c1b3d)',
+          border: '2px solid #6caeff', boxShadow: '0 8px 0 #07152f, 0 0 28px rgba(80,160,255,0.35)',
+        }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t('back')}
+          className="absolute flex items-center justify-center font-mono font-black"
+          style={{
+            top: 8, right: 10, width: 30, height: 30, borderRadius: '50%',
+            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.35)',
+            color: '#fff', fontSize: '1rem',
+          }}
+        >
+          ×
+        </button>
+        <div style={{ color: '#8dccff', fontSize: 'clamp(1rem,4vw,1.25rem)', fontWeight: 900, paddingRight: 25 }}>
+          {info.title}
+        </div>
+        <div
+          className="mt-4 whitespace-pre-line"
+          style={{ color: '#e4efff', fontSize: 'clamp(0.82rem,3.5vw,1rem)', lineHeight: 1.6 }}
+        >
+          {info.description}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Game Component ──────────────────────────────────────────────────────
 export function Game() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -154,6 +229,7 @@ export function Game() {
   const [spritesReady, setSpritesReady] = useState(false);
   const [musicVol, setMusicVol] = useState(0.5);
   const [pauseSettingsOpen, setPauseSettingsOpen] = useState(false);
+  const [info, setInfo] = useState<InfoData | null>(null);
 
   // Background music
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -243,6 +319,7 @@ export function Game() {
   };
 
   const onPlayAgain = () => { setScreen('MENU'); setTimeout(() => setScreen('DIFFICULTY'), 10); };
+  const showInfo = (title: string, description: string) => setInfo({ title, description });
 
   const onPause  = () => { stopGameLoop(); State.status = 'PAUSED'; setGameStatus('PAUSED'); };
   const onResume = () => {
@@ -322,19 +399,25 @@ export function Game() {
         {([ ['easy','diffEasy','diffEasyDesc','#22aa44','#0a5522'],
              ['medium','diffMedium','diffMediumDesc','#dd9900','#664400'],
              ['hard','diffHard','diffHardDesc','#cc2222','#660000'] ] as const).map(([d, labelKey, descKey, color, shadow]) => (
-          <button key={d} onClick={() => onStartGame(d)}
-            className="font-mono font-black tracking-widest text-white transition-all active:scale-95"
-            style={{ padding:'14px 0', borderRadius:14, fontSize:'clamp(0.9rem,3.5vw,1.1rem)',
-              background:`linear-gradient(180deg,${color} 0%,${shadow} 100%)`,
-              border:`3px solid ${shadow}`, boxShadow:`0 4px 0 ${shadow}` }}>
-            {t(labelKey)}
-            <div style={{ fontSize:'0.65rem', opacity: 0.8, marginTop: 2 }}>{t(descKey)}</div>
-          </button>
+          <div key={d} className="relative">
+            <button onClick={() => onStartGame(d)}
+              className="w-full font-mono font-black tracking-widest text-white transition-all active:scale-95"
+              style={{ padding:'17px 48px 17px 16px', borderRadius:14, fontSize:'clamp(0.9rem,3.5vw,1.1rem)',
+                background:`linear-gradient(180deg,${color} 0%,${shadow} 100%)`,
+                border:`3px solid ${shadow}`, boxShadow:`0 4px 0 ${shadow}` }}>
+              {t(labelKey)}
+            </button>
+            <InfoButton
+              label={`${t(labelKey)} — ${t('info')}`}
+              onClick={() => showInfo(t(labelKey), t(descKey))}
+            />
+          </div>
         ))}
         <button onClick={() => setScreen('MENU')} className="font-mono font-bold tracking-widest transition-all active:scale-95 mt-2" style={BtnSecondary}>
           ← {t('back')}
         </button>
       </div>
+      <InfoModal info={info} onClose={() => setInfo(null)} />
     </div>
   );
 
@@ -352,22 +435,28 @@ export function Game() {
           { h: 'green'  as HeroType, labelKey: 'heroGreen'  as const, descKey: 'heroGreenDesc'  as const, color: '#1a7a22', border: '#0a4a10', glow: '#44dd00' },
           { h: 'purple' as HeroType, labelKey: 'heroPurple' as const, descKey: 'heroPurpleDesc' as const, color: '#5a1a88', border: '#330066', glow: '#bb44ff' },
         ]).map(({ h, labelKey, descKey, color, border, glow }) => (
-          <button key={h} onClick={() => onPickHero(h)}
-            className="font-mono font-black text-white transition-all active:scale-95 flex items-center gap-4 text-left"
-            style={{ padding:'12px 16px', borderRadius:16,
-              background:`linear-gradient(135deg,${color} 0%,${border} 100%)`,
-              border:`2px solid ${glow}`, boxShadow:`0 0 14px ${glow}44` }}>
-            <SlimeIcon hero={h} size={52} />
-            <div className="flex-1">
-              <div style={{ fontSize:'clamp(1rem,4vw,1.15rem)', letterSpacing:'0.05em' }}>{t(labelKey)}</div>
-              <div style={{ fontSize:'0.68rem', opacity:0.85, marginTop:3, whiteSpace:'pre-line', fontWeight:400 }}>{t(descKey)}</div>
-            </div>
-          </button>
+          <div key={h} className="relative">
+            <button onClick={() => onPickHero(h)}
+              className="w-full font-mono font-black text-white transition-all active:scale-95 flex items-center gap-4 text-left"
+              style={{ padding:'14px 54px 14px 16px', borderRadius:16,
+                background:`linear-gradient(135deg,${color} 0%,${border} 100%)`,
+                border:`2px solid ${glow}`, boxShadow:`0 0 14px ${glow}44` }}>
+              <SlimeIcon hero={h} size={52} />
+              <div className="flex-1" style={{ fontSize:'clamp(1rem,4vw,1.15rem)', letterSpacing:'0.05em' }}>
+                {t(labelKey)}
+              </div>
+            </button>
+            <InfoButton
+              label={`${t(labelKey)} — ${t('info')}`}
+              onClick={() => showInfo(t(labelKey), t(descKey))}
+            />
+          </div>
         ))}
         <button onClick={() => setScreen('DIFFICULTY')} className="font-mono font-bold tracking-widest transition-all active:scale-95 mt-2" style={BtnSecondary}>
           ← {t('back')}
         </button>
       </div>
+      <InfoModal info={info} onClose={() => setInfo(null)} />
     </div>
   );
 
@@ -590,14 +679,15 @@ export function Game() {
             style={{ fontSize:'clamp(1.8rem,8vw,3rem)', color:'#ffd700', textShadow:'0 4px 0 #996600', letterSpacing:'0.08em' }}>
             {t('levelUp')}
           </h2>
-          <UpgradeButtons upgrades={upgrades} onPick={onUpgrade} />
+            <UpgradeButtons upgrades={upgrades} onPick={onUpgrade} onInfo={showInfo} />
         </div>
       )}
 
       {/* ── CHEST overlay — artifact ── */}
       {gameStatus === 'CHEST' && State.chestReward?.type === 'artifact' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 select-none">
-          <div style={{ fontSize:'3rem' }}>📦</div>
+          <img src={assetUrl('/sprites/chest.png')} alt="" draggable={false}
+            style={{ width:64, height:64, imageRendering:'pixelated', objectFit:'contain' }} />
           <h2 className="font-mono font-black text-center mb-2 mt-2"
             style={{ fontSize:'clamp(1.4rem,6vw,2.2rem)', color:'#ffd700', textShadow:'0 3px 0 #886600' }}>
             {t('artifactFound')}
@@ -606,11 +696,15 @@ export function Game() {
             style={{ background:'linear-gradient(135deg,#2a1a4a,#1a0e3a)', border:'2px solid #8844ff',
               boxShadow:'0 0 30px rgba(150,80,255,0.4)', maxWidth:300, width:'90%' }}>
             <div style={{ fontSize:'2rem', marginBottom:8 }}>✨</div>
-            <div style={{ color:'#ffcc88', fontSize:'clamp(1rem,4vw,1.2rem)', fontWeight:900 }}>
+            <div className="relative" style={{ color:'#ffcc88', fontSize:'clamp(1rem,4vw,1.2rem)', fontWeight:900, paddingRight:34 }}>
               {t(artLabelKey(State.chestReward.artifact.id))}
-            </div>
-            <div style={{ color:'#ccaaff', fontSize:'clamp(0.75rem,3vw,0.9rem)', marginTop:6 }}>
-              {t(artDescKey(State.chestReward.artifact.id))}
+              <InfoButton
+                label={`${t(artLabelKey(State.chestReward.artifact.id))} — ${t('info')}`}
+                onClick={() => showInfo(
+                  t(artLabelKey(State.chestReward!.artifact.id)),
+                  t(artDescKey(State.chestReward!.artifact.id)),
+                )}
+              />
             </div>
           </div>
           <button onClick={onClaimArtifact}
@@ -625,12 +719,13 @@ export function Game() {
       {/* ── CHEST overlay — upgrade choices ── */}
       {gameStatus === 'CHEST' && !State.chestReward && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 select-none">
-          <div style={{ fontSize:'2.5rem' }}>📦</div>
+          <img src={assetUrl('/sprites/chest.png')} alt="" draggable={false}
+            style={{ width:64, height:64, imageRendering:'pixelated', objectFit:'contain' }} />
           <h2 className="font-mono font-black text-center mb-6 mt-2"
             style={{ fontSize:'clamp(1.4rem,6vw,2.2rem)', color:'#ffd700', textShadow:'0 3px 0 #886600' }}>
             {t('chest')}
           </h2>
-          <UpgradeButtons upgrades={upgrades} onPick={onUpgrade} />
+          <UpgradeButtons upgrades={upgrades} onPick={onUpgrade} onInfo={showInfo} />
         </div>
       )}
 
@@ -693,7 +788,8 @@ export function Game() {
             </button>
           </div>
         </div>
-      )}
+       )}
+       <InfoModal info={info} onClose={() => setInfo(null)} />
     </div>
   );
 }
@@ -715,6 +811,21 @@ function artDescKey(id: string): LangKey {
   return map[id] ?? 'artMagnetDesc';
 }
 
+function upgradeDescKey(id: string): LangKey {
+  const map: Record<string, LangKey> = {
+    dmg: 'upgDmgDesc',
+    atk_spd: 'upgAtkSpdDesc',
+    move_spd: 'upgMoveSpdDesc',
+    hp: 'upgHpDesc',
+    proj: 'upgProjDesc',
+    w2: 'upgSlimeSprayDesc',
+    w3: 'upgStickyWebDesc',
+    shrink: 'upgShrinkDesc',
+    split: 'upgSplitDesc',
+  };
+  return map[id] ?? 'upgDmgDesc';
+}
+
 function Badge({ children, color, border }: { children: React.ReactNode; color: string; border: string }) {
   return (
     <span className="font-mono px-2 py-1 rounded-lg"
@@ -732,17 +843,31 @@ function StatLine({ label, value, color }: { label: string; value: string; color
   );
 }
 
-function UpgradeButtons({ upgrades, onPick }: { upgrades: UpgradeOptions[]; onPick: (u: UpgradeOptions) => void }) {
+function UpgradeButtons({
+  upgrades,
+  onPick,
+  onInfo,
+}: {
+  upgrades: UpgradeOptions[];
+  onPick: (u: UpgradeOptions) => void;
+  onInfo: (title: string, description: string) => void;
+}) {
   return (
     <div className="flex flex-col gap-3 w-full px-4" style={{ maxWidth:380 }}>
       {upgrades.map((u, i) => (
-        <button key={i} onClick={() => onPick(u)}
-          className="w-full font-mono font-bold text-white transition-all active:scale-95"
-          style={{ padding:'15px 20px', borderRadius:14, fontSize:'clamp(0.85rem,3.5vw,1rem)',
-            background:'linear-gradient(135deg,#1a2a4a,#0f1e3a)',
-            border:'2px solid #3366cc', boxShadow:'0 4px 0 #0a1a3a', textAlign:'left' }}>
-          {u.label}
-        </button>
+        <div key={i} className="relative">
+          <button onClick={() => onPick(u)}
+            className="w-full font-mono font-bold text-white transition-all active:scale-95"
+            style={{ padding:'15px 58px 15px 20px', borderRadius:14, fontSize:'clamp(0.85rem,3.5vw,1rem)',
+              background:'linear-gradient(135deg,#1a2a4a,#0f1e3a)',
+              border:'2px solid #3366cc', boxShadow:'0 4px 0 #0a1a3a', textAlign:'left', whiteSpace:'pre-line' }}>
+            {u.label}
+          </button>
+          <InfoButton
+            label={`${u.label.replace(/\n/g, ' ')} — ${t('info')}`}
+            onClick={() => onInfo(u.label.replace(/\n/g, ' '), t(upgradeDescKey(u.id)))}
+          />
+        </div>
       ))}
     </div>
   );
