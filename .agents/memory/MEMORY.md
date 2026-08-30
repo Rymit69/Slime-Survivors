@@ -1,0 +1,1 @@
+- [Capacitor routing base](capacitor-routing.md) — keep `./` for packaged assets, but use an empty client-router base in offline APK builds.
