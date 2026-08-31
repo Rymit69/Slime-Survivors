@@ -164,7 +164,12 @@ function InfoButton({ onClick, label }: { onClick: () => void; label: string }) 
         color: '#fff', fontSize: '1.1rem', lineHeight: 1, zIndex: 2,
       }}
     >
-      !
+      <img
+        src={assetUrl('/ui/info-question.png')}
+        alt=""
+        draggable={false}
+        style={{ width: 20, height: 20, imageRendering: 'pixelated' }}
+      />
     </button>
   );
 }
@@ -820,6 +825,9 @@ function upgradeDescKey(id: string): LangKey {
     proj: 'upgProjDesc',
     w2: 'upgSlimeSprayDesc',
     w3: 'upgStickyWebDesc',
+    weapon_1: 'upgSlimeBoltDesc',
+    weapon_2: 'upgSlimeSprayDesc',
+    weapon_3: 'upgStickyWebDesc',
     shrink: 'upgShrinkDesc',
     split: 'upgSplitDesc',
   };
@@ -855,17 +863,68 @@ function UpgradeButtons({
   return (
     <div className="flex flex-col gap-3 w-full px-4" style={{ maxWidth:380 }}>
       {upgrades.map((u, i) => (
-        <div key={i} className="relative">
+        <div key={`${u.id}-${u.level}-${i}`} className="relative" style={{ minHeight:108 }}>
+          <img
+            src={assetUrl('/ui/upgrade-card.png')}
+            alt=""
+            draggable={false}
+            className="pointer-events-none absolute inset-0 h-full w-full"
+            style={{
+              objectFit: 'fill',
+              imageRendering: 'pixelated',
+              zIndex: 1,
+              filter: u.kind === 'weapon'
+                ? 'sepia(1) saturate(4) hue-rotate(165deg) brightness(1.25)'
+                : u.kind === 'mini'
+                  ? 'sepia(1) saturate(5) hue-rotate(345deg) brightness(1.15)'
+                  : 'sepia(1) saturate(3) hue-rotate(195deg) brightness(1.15)',
+            }}
+          />
           <button onClick={() => onPick(u)}
             className="w-full font-mono font-bold text-white transition-all active:scale-95"
-            style={{ padding:'15px 58px 15px 20px', borderRadius:14, fontSize:'clamp(0.85rem,3.5vw,1rem)',
-              background:'linear-gradient(135deg,#1a2a4a,#0f1e3a)',
-              border:'2px solid #3366cc', boxShadow:'0 4px 0 #0a1a3a', textAlign:'left', whiteSpace:'pre-line' }}>
-            {u.label}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 0,
+              padding:'13px 62px 31px 22px',
+              borderRadius:22,
+              fontSize:'clamp(0.78rem,3.2vw,0.98rem)',
+              background: u.kind === 'weapon'
+                ? 'linear-gradient(135deg,#273d74,#172752)'
+                : u.kind === 'mini'
+                  ? 'linear-gradient(135deg,#594728,#2d2417)'
+                  : 'linear-gradient(135deg,#293b70,#17244b)',
+              border: 0,
+              boxShadow:'0 4px 0 rgba(4,10,28,0.78)',
+              textAlign:'left',
+              whiteSpace:'pre-line',
+            }}>
+            <span style={{ display:'block', lineHeight:1.1 }}>{u.label}</span>
+            <span style={{ display:'block', marginTop:7, color:'#fff1a8', fontSize:'0.72em', letterSpacing:'0.08em' }}>
+              {t('upgradeLevel')} {u.level}{u.level === u.maxLevel ? ` · ${t('upgradeMax')}` : ''}
+            </span>
           </button>
+          <div
+            className="pointer-events-none absolute bottom-3 right-4 flex items-center gap-0.5"
+            style={{ zIndex: 2 }}
+            aria-label={`${t('upgradeLevel')} ${u.level} / ${u.maxLevel}`}
+          >
+            {Array.from({ length: u.maxLevel }, (_, level) => (
+              <img
+                key={level}
+                src={assetUrl(`/ui/upgrade-level-${level < u.level ? 'filled' : 'empty'}.png`)}
+                alt=""
+                draggable={false}
+                style={{ width: 15, height: 15, imageRendering:'pixelated' }}
+              />
+            ))}
+          </div>
           <InfoButton
             label={`${u.label.replace(/\n/g, ' ')} — ${t('info')}`}
-            onClick={() => onInfo(u.label.replace(/\n/g, ' '), t(upgradeDescKey(u.id)))}
+            onClick={() => onInfo(
+              `${u.label.replace(/\n/g, ' ')} ${t('upgradeLevel')} ${u.level}`,
+              `${t(upgradeDescKey(u.id))}\n${t('upgradeLevel')} ${u.level} / ${u.maxLevel}`,
+            )}
           />
         </div>
       ))}

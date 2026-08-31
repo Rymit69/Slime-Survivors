@@ -5,6 +5,9 @@ export type GameStatus = 'START' | 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER' | 'WIN' 
 export interface UpgradeOptions {
   id: string;
   label: string;
+  kind: 'stat' | 'weapon' | 'mini';
+  level: number;
+  maxLevel: number;
   apply: (state: GameState) => void;
 }
 
@@ -45,6 +48,8 @@ export class GameState {
   chests: Chest[] = [];
 
   unlockedWeapons: number[] = [1];
+  weaponLevels: Record<number, number> = { 1: 1 };
+  upgradeLevels: Record<string, number> = {};
 
   stats = {
     damageMultiplier: 1.0,

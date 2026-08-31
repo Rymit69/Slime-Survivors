@@ -6,6 +6,12 @@ import { generateLakes, isInsideLake, generateAppleTrees, TILE_SIZE } from './wo
 import { createWeapons } from './weapons';
 import { t } from './lang';
 import { ALL_ARTIFACTS } from './artifacts';
+import {
+  getStickyWebRadius,
+  getWeaponAttackSpeedMultiplier,
+  getWeaponLevel,
+  MAX_UPGRADE_LEVEL,
+} from './upgradeMath';
 
 let animationFrameId = 0;
 let lastTime = 0;
@@ -91,6 +97,8 @@ export function startGameLoop(
     projectileCountBonus: 0,
   };
   State.unlockedWeapons = [1];
+  State.weaponLevels = { 1: 1 };
+  State.upgradeLevels = {};
   State.lastEnemySpawnTime = 0;
   State.shakeTime = 0;
   State.bossBatSpawned = false;
@@ -327,9 +335,10 @@ function update(
 
   // ── 3. Update enemies ───────────────────────────────────────────────────────
   const hasWeb = State.unlockedWeapons.includes(3);
+  const webRadius = getStickyWebRadius(State);
   for (let i = State.enemies.length - 1; i >= 0; i--) {
     const e = State.enemies[i];
-    e.slowed = !e.isBoss && hasWeb && Math.hypot(State.player.x - e.x, State.player.y - e.y) <= 120;
+    e.slowed = !e.isBoss && hasWeb && Math.hypot(State.player.x - e.x, State.player.y - e.y) <= webRadius;
     const spd = e.slowed ? e.speed * 0.5 : e.speed;
     const ang = Math.atan2(State.player.y - e.y, State.player.x - e.x);
     e.vx = Math.cos(ang) * spd;
@@ -368,7 +377,8 @@ function update(
   const totalDmgMult = State.stats.damageMultiplier + extraDamageMult;
   State.unlockedWeapons.forEach(wid => {
     const w = weapons[wid];
-    w.currentCooldown -= dt * State.stats.attackSpeedMultiplier;
+    const weaponAttackSpeed = getWeaponAttackSpeedMultiplier(State, wid);
+    w.currentCooldown -= dt * State.stats.attackSpeedMultiplier * weaponAttackSpeed;
     if (w.currentCooldown <= 0 && w.baseCooldown > 0) {
       const saved = State.stats.damageMultiplier;
       State.stats.damageMultiplier = totalDmgMult;
@@ -550,21 +560,66 @@ function update(
 }
 
 // ── Upgrade pool ─────────────────────────────────────────────────────────────
+function createUpgrade(
+  state: GameState,
+  id: string,
+  kind: UpgradeOptions['kind'],
+  labelKey: Parameters<typeof t>[0],
+  apply: (state: GameState) => void,
+): UpgradeOptions | null {
+  const level = (state.upgradeLevels[id] ?? 0) + 1;
+  if (level > MAX_UPGRADE_LEVEL) return null;
+  return {
+    id,
+    kind,
+    level,
+    maxLevel: MAX_UPGRADE_LEVEL,
+    label: t(labelKey),
+    apply: s => {
+      apply(s);
+      s.upgradeLevels[id] = level;
+    },
+  };
+}
+
+function createWeaponUpgrade(state: GameState, weaponId: number, labelKey: Parameters<typeof t>[0]): UpgradeOptions | null {
+  const level = getWeaponLevel(state, weaponId) + 1;
+  if (level > MAX_UPGRADE_LEVEL) return null;
+  return {
+    id: `weapon_${weaponId}`,
+    kind: 'weapon',
+    level,
+    maxLevel: MAX_UPGRADE_LEVEL,
+    label: t(labelKey),
+    apply: s => { s.weaponLevels[weaponId] = level; },
+  };
+}
+
 function generateUpgrades(): UpgradeOptions[] {
-  const pool: UpgradeOptions[] = [
-    { id: 'dmg',      label: t('upgDmg'),     apply: s => { s.stats.damageMultiplier += 0.2; } },
-    { id: 'atk_spd',  label: t('upgAtkSpd'),  apply: s => { s.stats.attackSpeedMultiplier += 0.2; } },
-    { id: 'move_spd', label: t('upgMoveSpd'), apply: s => { s.stats.moveSpeedMultiplier += 0.15; } },
-    { id: 'hp',       label: t('upgHp'),      apply: s => { s.player.baseMaxHP += 50; s.player.maxHP += 50; s.player.currentHP += 50; } },
-    { id: 'proj',     label: t('upgProj'),    apply: s => { s.stats.projectileCountBonus += 1; } },
-    { id: 'shrink',   label: t('upgShrink'),  apply: s => {
+  const pool: UpgradeOptions[] = [];
+  const add = (
+    id: string,
+    kind: UpgradeOptions['kind'],
+    labelKey: Parameters<typeof t>[0],
+    apply: (state: GameState) => void,
+  ) => {
+    const upgrade = createUpgrade(State, id, kind, labelKey, apply);
+    if (upgrade) pool.push(upgrade);
+  };
+
+  add('dmg', 'stat', 'upgDmg', s => { s.stats.damageMultiplier += 0.2; });
+  add('atk_spd', 'stat', 'upgAtkSpd', s => { s.stats.attackSpeedMultiplier += 0.2; });
+  add('move_spd', 'stat', 'upgMoveSpd', s => { s.stats.moveSpeedMultiplier += 0.15; });
+  add('hp', 'stat', 'upgHp', s => { s.player.baseMaxHP += 50; s.player.maxHP += 50; s.player.currentHP += 50; });
+  add('proj', 'stat', 'upgProj', s => { s.stats.projectileCountBonus += 1; });
+  add('shrink', 'stat', 'upgShrink', s => {
       const newBase = Math.max(50, s.player.baseMaxHP - 50);
       const diff = s.player.baseMaxHP - newBase;
       s.player.baseMaxHP = newBase;
       s.player.maxHP = Math.max(10, s.player.maxHP - diff);
       s.player.currentHP = Math.min(s.player.currentHP, s.player.maxHP);
-    }},
-    { id: 'split',    label: t('upgSplit'),   apply: s => {
+    });
+  add('split', 'mini', 'upgSplit', s => {
       s.player.currentHP = Math.max(1, s.player.currentHP * 0.75);
       const angle = (s.miniClones.length * Math.PI * 0.4) + Math.random() * 0.5;
       const clone: MiniClone = {
@@ -581,12 +636,25 @@ function generateUpgrades(): UpgradeOptions[] {
         weaponCooldown: 0,
       };
       s.miniClones.push(clone);
-    }},
-  ];
+    });
+
   if (!State.unlockedWeapons.includes(2) && State.level >= 5)
-    pool.push({ id: 'w2', label: t('upgSlimeSpray'), apply: s => { s.unlockedWeapons.push(2); } });
+    pool.push({
+      id: 'weapon_2', kind: 'weapon', level: 1, maxLevel: MAX_UPGRADE_LEVEL, label: t('upgSlimeSpray'),
+      apply: s => { s.unlockedWeapons.push(2); s.weaponLevels[2] = 1; },
+    });
   if (!State.unlockedWeapons.includes(3) && State.level >= 10)
-    pool.push({ id: 'w3', label: t('upgStickyWeb'),  apply: s => { s.unlockedWeapons.push(3); } });
+    pool.push({
+      id: 'weapon_3', kind: 'weapon', level: 1, maxLevel: MAX_UPGRADE_LEVEL, label: t('upgStickyWeb'),
+      apply: s => { s.unlockedWeapons.push(3); s.weaponLevels[3] = 1; },
+    });
+
+  for (const [weaponId, labelKey] of [[1, 'weaponBolt'], [2, 'weaponSpray'], [3, 'weaponWeb']] as const) {
+    if (State.unlockedWeapons.includes(weaponId)) {
+      const upgrade = createWeaponUpgrade(State, weaponId, labelKey);
+      if (upgrade) pool.push(upgrade);
+    }
+  }
 
   const shuffled = pool.sort(() => Math.random() - 0.5);
   return shuffled.slice(0, 3);

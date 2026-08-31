@@ -4,6 +4,7 @@ import { t } from './lang';
 import { sp } from './sprites';
 import { TILE_SIZE } from './world';
 import { heroColor } from './gameLoop';
+import { getStickyWebRadius } from './upgradeMath';
 
 const BASE_MAX_HP = 100;
 
@@ -96,7 +97,7 @@ function renderChestNavigation(ctx: CanvasRenderingContext2D, state: GameState) 
     const bob = Math.sin(time / 220) * 4;
     const arrowX = state.player.x;
     const arrowY = state.player.y - 58 + bob;
-    drawRotatedSprite(ctx, 'chest_arrow', arrowX, arrowY, 38, angle + Math.PI / 2 + wobble);
+    drawRotatedSprite(ctx, 'chest_arrow', arrowX, arrowY, 38, angle + Math.PI / 2 + Math.PI + wobble);
   } else {
     // Once the chest is close, keep the pointer anchored above it instead of
     // rotating it around the player.
@@ -242,7 +243,7 @@ export function render(
   if (state.unlockedWeapons.includes(3)) {
     ctx.fillStyle = 'rgba(50, 200, 50, 0.10)';
     ctx.beginPath();
-    ctx.arc(state.player.x, state.player.y, 120, 0, Math.PI * 2);
+    ctx.arc(state.player.x, state.player.y, getStickyWebRadius(state), 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = 'rgba(50, 200, 50, 0.3)';
     ctx.lineWidth = 2;
