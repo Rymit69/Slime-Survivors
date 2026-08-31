@@ -1,1 +1,2 @@
 - [Capacitor routing base](capacitor-routing.md) — keep `./` for packaged assets, but use an empty client-router base in offline APK builds.
+- [Upgrade card assets](upgrade-card-assets.md) — trim transparent margins before stretching the supplied frame texture into the upgrade card.
