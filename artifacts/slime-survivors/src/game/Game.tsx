@@ -918,8 +918,8 @@ function UpgradeButtons({
                 : u.kind === 'mini'
                   ? 'linear-gradient(135deg,#594728,#2d2417)'
                   : 'linear-gradient(135deg,#293b70,#17244b)',
-              border: 0,
-              boxShadow:'0 4px 0 rgba(4,10,28,0.78)',
+              border: `3px solid ${CARD_COLORS[u.kind]}`,
+              boxShadow:`0 5px 0 ${CARD_COLORS[u.kind]}66`,
               textAlign:'left',
               whiteSpace:'pre-line',
             }}>
