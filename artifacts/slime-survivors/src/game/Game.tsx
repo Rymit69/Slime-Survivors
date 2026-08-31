@@ -148,7 +148,29 @@ const VolumeButton: React.CSSProperties = {
 
 type InfoData = { title: string; description: string };
 
-function InfoButton({ onClick, label }: { onClick: () => void; label: string }) {
+type UpgradeKind = UpgradeOptions['kind'];
+
+const CARD_COLORS: Record<UpgradeKind, string> = {
+  stat: '#86a9ff',
+  weapon: '#5ee4ff',
+  mini: '#ffd15a',
+};
+
+const CARD_IMAGE_FILTERS: Record<UpgradeKind, string> = {
+  stat: 'sepia(1) saturate(6) hue-rotate(185deg) brightness(1.15)',
+  weapon: 'sepia(1) saturate(7) hue-rotate(145deg) brightness(1.15)',
+  mini: 'sepia(1) saturate(7) hue-rotate(350deg) brightness(1.1)',
+};
+
+function InfoButton({
+  onClick,
+  label,
+  tint,
+}: {
+  onClick: () => void;
+  label: string;
+  tint?: UpgradeKind;
+}) {
   return (
     <button
       type="button"
@@ -160,7 +182,7 @@ function InfoButton({ onClick, label }: { onClick: () => void; label: string }) 
       className="absolute flex items-center justify-center font-mono font-black transition-all active:scale-90"
       style={{
         top: 8, right: 8, width: 32, height: 32, borderRadius: '50%',
-        background: 'rgba(5,15,40,0.72)', border: '2px solid rgba(190,225,255,0.7)',
+        background: 'transparent', border: 0, padding: 0,
         color: '#fff', fontSize: '1.1rem', lineHeight: 1, zIndex: 2,
       }}
     >
@@ -168,7 +190,10 @@ function InfoButton({ onClick, label }: { onClick: () => void; label: string }) 
         src={assetUrl('/ui/info-question.png')}
         alt=""
         draggable={false}
-        style={{ width: 20, height: 20, imageRendering: 'pixelated' }}
+        style={{
+          width: 32, height: 32, imageRendering: 'pixelated',
+          filter: tint ? CARD_IMAGE_FILTERS[tint] : 'none',
+        }}
       />
     </button>
   );
@@ -863,21 +888,20 @@ function UpgradeButtons({
   return (
     <div className="flex flex-col gap-3 w-full px-4" style={{ maxWidth:380 }}>
       {upgrades.map((u, i) => (
-        <div key={`${u.id}-${u.level}-${i}`} className="relative" style={{ minHeight:108 }}>
-          <img
-            src={assetUrl('/ui/upgrade-card.png')}
-            alt=""
-            draggable={false}
-            className="pointer-events-none absolute inset-0 h-full w-full"
+        <div key={`${u.id}-${u.level}-${i}`} className="relative" style={{ minHeight:124 }}>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
             style={{
-              objectFit: 'fill',
-              imageRendering: 'pixelated',
+              backgroundColor: CARD_COLORS[u.kind],
+              maskImage: `url(${assetUrl('/ui/upgrade-card.png')})`,
+              WebkitMaskImage: `url(${assetUrl('/ui/upgrade-card.png')})`,
+              maskSize: '100% 100%',
+              WebkitMaskSize: '100% 100%',
+              maskRepeat: 'no-repeat',
+              WebkitMaskRepeat: 'no-repeat',
+              opacity: 0.95,
               zIndex: 1,
-              filter: u.kind === 'weapon'
-                ? 'sepia(1) saturate(4) hue-rotate(165deg) brightness(1.25)'
-                : u.kind === 'mini'
-                  ? 'sepia(1) saturate(5) hue-rotate(345deg) brightness(1.15)'
-                  : 'sepia(1) saturate(3) hue-rotate(195deg) brightness(1.15)',
             }}
           />
           <button onClick={() => onPick(u)}
@@ -915,12 +939,16 @@ function UpgradeButtons({
                 src={assetUrl(`/ui/upgrade-level-${level < u.level ? 'filled' : 'empty'}.png`)}
                 alt=""
                 draggable={false}
-                style={{ width: 15, height: 15, imageRendering:'pixelated' }}
+                style={{
+                  width: 15, height: 15, imageRendering:'pixelated',
+                  filter: CARD_IMAGE_FILTERS[u.kind],
+                }}
               />
             ))}
           </div>
           <InfoButton
             label={`${u.label.replace(/\n/g, ' ')} — ${t('info')}`}
+            tint={u.kind}
             onClick={() => onInfo(
               `${u.label.replace(/\n/g, ' ')} ${t('upgradeLevel')} ${u.level}`,
               `${t(upgradeDescKey(u.id))}\n${t('upgradeLevel')} ${u.level} / ${u.maxLevel}`,
