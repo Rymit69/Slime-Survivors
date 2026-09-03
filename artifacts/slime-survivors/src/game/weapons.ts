@@ -1,6 +1,6 @@
 import { Player, Enemy, Projectile } from './entities';
 import type { GameState } from './state';
-import { getWeaponDamageMultiplier } from './upgradeMath';
+import { getWeaponDamageMultiplier, getWeaponProjectileSize } from './upgradeMath';
 
 export interface Weapon {
   id: number;
@@ -33,7 +33,8 @@ export const createWeapons = (): Record<number, Weapon> => ({
           id: Math.random().toString(),
           x: player.x, y: player.y,
           vx: Math.cos(angle), vy: Math.sin(angle),
-          speed: 250, damage: 25 * state.stats.damageMultiplier * getWeaponDamageMultiplier(state, 1), range: 400,
+          speed: 250, damage: 25 * state.stats.damageMultiplier * getWeaponDamageMultiplier(state, 1),
+          size: getWeaponProjectileSize(state, 1), range: 400,
           distanceTraveled: 0, weaponId: 1, lifeTime: 0
         });
       }
@@ -52,7 +53,8 @@ export const createWeapons = (): Record<number, Weapon> => ({
           id: Math.random().toString(),
           x: player.x, y: player.y,
           vx: Math.cos(angle), vy: Math.sin(angle),
-          speed: 150, damage: 15 * state.stats.damageMultiplier * getWeaponDamageMultiplier(state, 2), range: 300,
+          speed: 150, damage: 15 * state.stats.damageMultiplier * getWeaponDamageMultiplier(state, 2),
+          size: getWeaponProjectileSize(state, 2), range: 300,
           distanceTraveled: 0, weaponId: 2, lifeTime: 0
         });
       }

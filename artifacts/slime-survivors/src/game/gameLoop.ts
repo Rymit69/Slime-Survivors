@@ -10,6 +10,7 @@ import {
   getStickyWebRadius,
   getWeaponAttackSpeedMultiplier,
   getWeaponLevel,
+  getWeaponProjectileSize,
   MAX_UPGRADE_LEVEL,
 } from './upgradeMath';
 
@@ -435,6 +436,7 @@ function update(
           x: clone.x, y: clone.y,
           vx: Math.cos(ang + off), vy: Math.sin(ang + off),
           speed: 250,
+          size: getWeaponProjectileSize(State, 1),
           damage: 25 * totalDmgMult * 0.25,
           range: 400, distanceTraveled: 0, weaponId: 1, lifeTime: 0,
         });
@@ -654,6 +656,29 @@ function generateUpgrades(): UpgradeOptions[] {
       const upgrade = createWeaponUpgrade(State, weaponId, labelKey);
       if (upgrade) pool.push(upgrade);
     }
+  }
+
+  if (pool.length === 0) {
+    return [{
+      id: 'heal',
+      kind: 'stat',
+      level: 1,
+      maxLevel: 1,
+      label: t('upgHeal'),
+      apply: s => {
+        const healed = Math.min(50, s.player.maxHP - s.player.currentHP);
+        s.player.currentHP = Math.min(s.player.maxHP, s.player.currentHP + 50);
+        s.damageTexts.push({
+          id: Math.random().toString(),
+          x: s.player.x,
+          y: s.player.y - 20,
+          text: `+${Math.round(healed)} HP`,
+          lifeTime: 1.2,
+          maxLifeTime: 1.2,
+          color: '#00ff88',
+        });
+      },
+    }];
   }
 
   const shuffled = pool.sort(() => Math.random() - 0.5);

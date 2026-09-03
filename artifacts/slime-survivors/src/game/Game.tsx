@@ -855,6 +855,7 @@ function upgradeDescKey(id: string): LangKey {
     weapon_3: 'upgStickyWebDesc',
     shrink: 'upgShrinkDesc',
     split: 'upgSplitDesc',
+    heal: 'upgHealDesc',
   };
   return map[id] ?? 'upgDmgDesc';
 }

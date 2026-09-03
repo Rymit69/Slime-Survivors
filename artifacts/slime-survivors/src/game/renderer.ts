@@ -386,7 +386,7 @@ export function render(
   for (const proj of state.projectiles) {
     ctx.fillStyle = pColor;
     ctx.beginPath();
-    ctx.arc(proj.x, proj.y, 6, 0, Math.PI * 2);
+     ctx.arc(proj.x, proj.y, proj.size, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;

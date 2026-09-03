@@ -50,6 +50,7 @@ export interface Enemy extends Entity {
 export interface Projectile extends Entity {
   vx: number; vy: number;
   speed: number; damage: number;
+  size: number;
   range: number; distanceTraveled: number;
   weaponId: number; lifeTime: number;
 }

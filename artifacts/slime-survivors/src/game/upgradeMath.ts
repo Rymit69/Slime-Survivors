@@ -7,11 +7,15 @@ export function getWeaponLevel(state: GameState, weaponId: number): number {
 }
 
 export function getWeaponDamageMultiplier(state: GameState, weaponId: number): number {
-  return 1 + (getWeaponLevel(state, weaponId) - 1) * 0.2;
+  return 1 + (getWeaponLevel(state, weaponId) - 1) * 0.35;
 }
 
 export function getWeaponAttackSpeedMultiplier(state: GameState, weaponId: number): number {
   return 1 + (getWeaponLevel(state, weaponId) - 1) * 0.15;
+}
+
+export function getWeaponProjectileSize(state: GameState, weaponId: number): number {
+  return weaponId === 1 && getWeaponLevel(state, weaponId) >= MAX_UPGRADE_LEVEL ? 8 : 6;
 }
 
 export function getStickyWebRadius(state: GameState): number {
