@@ -41,6 +41,7 @@ function drawSprite(
   w: number, h: number,
   flipH = false,
   alpha = 1.0,
+  cropSlime = false,
 ) {
   const img = sp(key);
   ctx.save();
@@ -48,7 +49,26 @@ function drawSprite(
   ctx.translate(cx, cy);
   if (flipH) ctx.scale(-1, 1);
   if (img) {
-    ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    if (cropSlime) {
+      // Slime PNGs have transparent padding around the actual pixel art.
+      // Draw only the art bounds so mobile zoom does not make the character
+      // look like a tiny, compressed texture.
+      const mini = key.startsWith('slime_mini_');
+      const source = mini
+        ? { x: 2, y: 6, width: 27, height: 22 }
+        : { x: 4, y: 14, width: 55, height: 46 };
+      const sourceAspect = source.width / source.height;
+      const targetAspect = w / h;
+      const drawW = targetAspect > sourceAspect ? h * sourceAspect : w;
+      const drawH = targetAspect > sourceAspect ? h : w / sourceAspect;
+      ctx.drawImage(
+        img,
+        source.x, source.y, source.width, source.height,
+        -drawW / 2, -drawH / 2, drawW, drawH,
+      );
+    } else {
+      ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    }
   } else {
     ctx.fillStyle = '#4488ff';
     ctx.fillRect(-w / 2, -h / 2, w, h);
@@ -346,7 +366,7 @@ export function render(
                    Math.abs(clone.y - state.camera.y) < halfH + objectCullPadding;
     if (!inView) continue;
     const miniKey = `slime_mini_${clone.heroType}`;
-    drawSprite(ctx, miniKey, clone.x, clone.y, 28, 28, clone.facingLeft);
+    drawSprite(ctx, miniKey, clone.x, clone.y, 28 / zoom, 28 / zoom, clone.facingLeft, 1, true);
   }
 
   // ── 10. Player ──────────────────────────────────────────────────────────────
@@ -373,11 +393,13 @@ export function render(
   const sprKey = heroType === 'green'  ? `slime_green${player.animFrame + 1}` :
                  heroType === 'purple' ? `slime_purple${player.animFrame + 1}` :
                                          `slime${player.animFrame + 1}`;
-  drawSprite(ctx, sprKey, player.x, player.y, drawW, drawH, player.facingLeft, alpha);
+  const slimeDrawW = drawW / zoom;
+  const slimeDrawH = drawH / zoom;
+  drawSprite(ctx, sprKey, player.x, player.y, slimeDrawW, slimeDrawH, player.facingLeft, alpha, true);
 
   if (player.currentHP < player.maxHP || state.invincibilityTimer > 0) {
     const hpW = 50;
-    const hpY = player.y - drawH / 2 - 14;
+    const hpY = player.y - slimeDrawH / 2 - 14;
     ctx.fillStyle = '#550000'; ctx.fillRect(player.x - hpW / 2, hpY, hpW, 7);
     const pct = Math.max(0, player.currentHP / player.maxHP);
     ctx.fillStyle = pct > 0.5 ? '#00ff00' : pct > 0.25 ? '#ffff00' : '#ff0000';
