@@ -175,6 +175,9 @@ export function render(
   const S = TILE_SIZE;
   const halfW = width  / (2 * zoom);
   const halfH = height / (2 * zoom);
+  // Keep nearby scenery rendered beyond the visible edge so it does not pop
+  // out while the camera moves, especially on the zoomed-out mobile view.
+  const objectCullPadding = S * 10;
   const startCol = Math.floor((state.camera.x - halfW) / S) - 1;
   const endCol   = startCol + Math.ceil(width  / (S * zoom)) + 2;
   const startRow = Math.floor((state.camera.y - halfH) / S) - 1;
@@ -207,18 +210,18 @@ export function render(
   // ── 2. Lakes ────────────────────────────────────────────────────────────────
   for (const lake of state.lakes) {
     if (
-      lake.x + lake.widthTiles * S  < state.camera.x - width / 2  ||
-      lake.x                        > state.camera.x + width / 2  ||
-      lake.y + lake.heightTiles * S < state.camera.y - height / 2 ||
-      lake.y                        > state.camera.y + height / 2
+      lake.x + lake.widthTiles * S  < state.camera.x - halfW - objectCullPadding ||
+      lake.x                        > state.camera.x + halfW + objectCullPadding ||
+      lake.y + lake.heightTiles * S < state.camera.y - halfH - objectCullPadding ||
+      lake.y                        > state.camera.y + halfH + objectCullPadding
     ) continue;
     renderLake(ctx, lake);
   }
 
   // ── 3. Apple trees ──────────────────────────────────────────────────────────
   for (const tree of state.appleTrees) {
-    const inView = Math.abs(tree.x - state.camera.x) < width / 2 + 100 &&
-                   Math.abs(tree.y - state.camera.y) < height / 2 + 100;
+    const inView = Math.abs(tree.x - state.camera.x) < halfW + objectCullPadding &&
+                   Math.abs(tree.y - state.camera.y) < halfH + objectCullPadding;
     if (!inView) continue;
     drawSprite(ctx, 'apple_tree', tree.x, tree.y - 20, 80, 80);
     if (!tree.hasApple && tree.appleTimer > 0) {
@@ -253,8 +256,8 @@ export function render(
   // ── 6. Chests ───────────────────────────────────────────────────────────────
   for (const chest of state.chests) {
     if (chest.opened) continue;
-    const inView = Math.abs(chest.x - state.camera.x) < width / 2 + 60 &&
-                   Math.abs(chest.y - state.camera.y) < height / 2 + 60;
+    const inView = Math.abs(chest.x - state.camera.x) < halfW + objectCullPadding &&
+                   Math.abs(chest.y - state.camera.y) < halfH + objectCullPadding;
     if (!inView) continue;
     drawSprite(ctx, 'chest', chest.x, chest.y, 54, 54);
   }
@@ -278,8 +281,8 @@ export function render(
 
   // ── 8. Enemies ──────────────────────────────────────────────────────────────
   for (const enemy of state.enemies) {
-    const inView = Math.abs(enemy.x - state.camera.x) < width / 2 + 120 &&
-                   Math.abs(enemy.y - state.camera.y) < height / 2 + 120;
+    const inView = Math.abs(enemy.x - state.camera.x) < halfW + objectCullPadding &&
+                   Math.abs(enemy.y - state.camera.y) < halfH + objectCullPadding;
     if (!inView) continue;
 
     if (enemy.isBoss) {
@@ -339,8 +342,8 @@ export function render(
 
   // ── 9. Mini clones ──────────────────────────────────────────────────────────
   for (const clone of state.miniClones) {
-    const inView = Math.abs(clone.x - state.camera.x) < width / 2 + 60 &&
-                   Math.abs(clone.y - state.camera.y) < height / 2 + 60;
+    const inView = Math.abs(clone.x - state.camera.x) < halfW + objectCullPadding &&
+                   Math.abs(clone.y - state.camera.y) < halfH + objectCullPadding;
     if (!inView) continue;
     const miniKey = `slime_mini_${clone.heroType}`;
     drawSprite(ctx, miniKey, clone.x, clone.y, 28, 28, clone.facingLeft);
