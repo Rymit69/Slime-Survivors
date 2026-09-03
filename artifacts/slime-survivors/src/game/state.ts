@@ -61,10 +61,13 @@ export class GameState {
   lastEnemySpawnTime: number = 0;
   shakeTime: number = 0;
   invincibilityTimer: number = 0;
+  bossSkeletonSpawned: boolean = false;
   bossBatSpawned: boolean = false;
 
   upgradeChoices: UpgradeOptions[] = [];
   chestReward: ChestReward | null = null;
+  chestRewardsRemaining: number = 0;
+  currentChestKind: 'normal' | 'special' = 'normal';
 
   collectedArtifactIds: string[] = [];
   remainingArtifactIds: string[] = ['magnet', 'thorns', 'regen', 'berserker', 'iron_skin', 'swift'];

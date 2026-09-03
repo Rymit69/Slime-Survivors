@@ -100,9 +100,12 @@ export function startGameLoop(
   State.unlockedWeapons = [1];
   State.weaponLevels = { 1: 1 };
   State.upgradeLevels = {};
+  State.bossSkeletonSpawned = false;
   State.lastEnemySpawnTime = 0;
   State.shakeTime = 0;
   State.bossBatSpawned = false;
+  State.chestRewardsRemaining = 0;
+  State.currentChestKind = 'normal';
 
   State.lakes = generateLakes(20);
   State.appleTrees = generateAppleTrees(3 + Math.floor(Math.random() * 3), State.lakes);
@@ -176,7 +179,7 @@ function update(
   }
   if (hasThorns) {
     for (const enemy of State.enemies) {
-      if (enemy.isBoss) continue; // immortal
+      if (enemy.isFinalBoss) continue; // only the final boss is immortal
       if (Math.hypot(State.player.x - enemy.x, State.player.y - enemy.y) < 100) {
         enemy.currentHP -= 5 * dt;
       }
@@ -246,7 +249,37 @@ function update(
   if (State.player.vx < -5) State.player.facingLeft = true;
   else if (State.player.vx > 5) State.player.facingLeft = false;
 
-  // ── 1b. Boss bat at 30 minutes ──────────────────────────────────────────────
+  // ── 1b. Skeleton boss at 6 minutes ───────────────────────────────────────────
+  if (!State.bossSkeletonSpawned && State.timeSurvived >= 360) {
+    State.bossSkeletonSpawned = true;
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.max(width, height) / 2 + 260;
+    const skeletonBossHP = 80 * 5;
+    State.enemies.push({
+      id: 'boss_skeleton_6m',
+      type: 'skeleton',
+      isBoss: true,
+      x: State.player.x + Math.cos(angle) * distance,
+      y: State.player.y + Math.sin(angle) * distance,
+      maxHP: skeletonBossHP,
+      currentHP: skeletonBossHP,
+      speed: 42,
+      damagePerSec: 24,
+      xp: 150,
+      size: 30,
+      vx: 0, vy: 0, slowed: false,
+      animFrame: 0, animTimer: 0, facingLeft: false,
+    });
+    State.damageTexts.push({
+      id: Math.random().toString(),
+      x: State.player.x, y: State.player.y - 60,
+      text: t('skeletonBossWarning'),
+      lifeTime: 4, maxLifeTime: 4,
+      color: '#ffcc44',
+    });
+  }
+
+  // ── 1c. Final boss at 30 minutes ────────────────────────────────────────────
   if (!State.bossBatSpawned && State.timeSurvived >= 1800) {
     State.bossBatSpawned = true;
     const angle = Math.random() * Math.PI * 2;
@@ -254,6 +287,7 @@ function update(
       id: 'boss_bat',
       type: 'bat',
       isBoss: true,
+      isFinalBoss: true,
       x: State.player.x + Math.cos(angle) * (width / 2 + 300),
       y: State.player.y + Math.sin(angle) * (height / 2 + 300),
       maxHP: 9_999_999, currentHP: 9_999_999,
@@ -339,7 +373,7 @@ function update(
   const webRadius = getStickyWebRadius(State);
   for (let i = State.enemies.length - 1; i >= 0; i--) {
     const e = State.enemies[i];
-    e.slowed = !e.isBoss && hasWeb && Math.hypot(State.player.x - e.x, State.player.y - e.y) <= webRadius;
+    e.slowed = !e.isFinalBoss && hasWeb && Math.hypot(State.player.x - e.x, State.player.y - e.y) <= webRadius;
     const spd = e.slowed ? e.speed * 0.5 : e.speed;
     const ang = Math.atan2(State.player.y - e.y, State.player.x - e.x);
     e.vx = Math.cos(ang) * spd;
@@ -365,7 +399,7 @@ function update(
   if (State.player.currentHP <= 0) {
     // Was it the boss bat that landed the killing blow?
     const killedByBoss = State.enemies.some(
-      e => e.isBoss &&
+      e => e.isFinalBoss &&
       Math.hypot(State.player.x - e.x, State.player.y - e.y) <
         State.player.size * State.player.currentScale + e.size + 10
     );
@@ -456,8 +490,8 @@ function update(
     for (let j = State.enemies.length - 1; j >= 0; j--) {
       const e = State.enemies[j];
       if (Math.hypot(p.x - e.x, p.y - e.y) < e.size + 6) {
-        if (e.isBoss) {
-          // Immortal — projectiles bounce off, show "IMMORTAL!" text occasionally
+        if (e.isFinalBoss) {
+          // Final boss is immortal — projectiles bounce off
           if (Math.random() < 0.25) {
             State.damageTexts.push({ id: Math.random().toString(), x: e.x, y: e.y - 20, text: '✦ IMMORTAL', lifeTime: 0.6, maxLifeTime: 0.6, color: '#ff4488' });
           }
@@ -474,14 +508,28 @@ function update(
   // ── 7. Enemy deaths ─────────────────────────────────────────────────────────
   for (let i = State.enemies.length - 1; i >= 0; i--) {
     const e = State.enemies[i];
-    if (e.isBoss) continue; // immortal — never dies
+    if (e.isFinalBoss) continue; // immortal — never dies
     if (e.currentHP <= 0) {
       State.kills++;
       const color = pickOrbColor(e.type);
       const amount = Math.round(e.xp * orbMultiplier(color));
       State.xpOrbs.push({ id: Math.random().toString(), x: e.x, y: e.y, amount, collected: false, targetPlayer: false, color });
-      if (Math.random() < 0.01) {
-        State.chests.push({ id: Math.random().toString(), x: e.x + (Math.random() - 0.5) * 30, y: e.y + (Math.random() - 0.5) * 30, opened: false });
+      if (e.isBoss) {
+        State.chests.push({
+          id: 'special_chest_6m',
+          x: e.x,
+          y: e.y,
+          opened: false,
+          kind: 'special',
+        });
+      } else if (Math.random() < 0.01) {
+        State.chests.push({
+          id: Math.random().toString(),
+          x: e.x + (Math.random() - 0.5) * 30,
+          y: e.y + (Math.random() - 0.5) * 30,
+          opened: false,
+          kind: 'normal',
+        });
       }
       State.enemies.splice(i, 1);
     }
@@ -492,16 +540,9 @@ function update(
     const chest = State.chests[i];
     if (!chest.opened && Math.hypot(State.player.x - chest.x, State.player.y - chest.y) < 32) {
       chest.opened = true;
-      const hasArtifacts = State.remainingArtifactIds.length > 0;
-      const giveArtifact = hasArtifacts && Math.random() < 0.4;
-      if (giveArtifact) {
-        const idx = Math.floor(Math.random() * State.remainingArtifactIds.length);
-        const artId = State.remainingArtifactIds.splice(idx, 1)[0];
-        State.chestReward = { type: 'artifact', artifact: ALL_ARTIFACTS.find(a => a.id === artId)! };
-      } else {
-        State.chestReward = null;
-        State.upgradeChoices = generateUpgrades();
-      }
+      State.currentChestKind = chest.kind;
+      State.chestRewardsRemaining = chest.kind === 'special' ? 3 : 1;
+      rollChestReward();
       State.status = 'CHEST';
       onStateChange(State);
       return;
@@ -559,6 +600,33 @@ function update(
     State.status = 'LEVEL_UP';
     onStateChange(State);
   }
+}
+
+function rollChestReward() {
+  const hasArtifacts = State.remainingArtifactIds.length > 0;
+  const giveArtifact = hasArtifacts && Math.random() < 0.4;
+  if (giveArtifact) {
+    const idx = Math.floor(Math.random() * State.remainingArtifactIds.length);
+    const artId = State.remainingArtifactIds.splice(idx, 1)[0];
+    State.chestReward = { type: 'artifact', artifact: ALL_ARTIFACTS.find(a => a.id === artId)! };
+    State.upgradeChoices = [];
+  } else {
+    State.chestReward = null;
+    State.upgradeChoices = generateUpgrades();
+  }
+}
+
+export function advanceChestReward(): boolean {
+  if (State.chestRewardsRemaining <= 1) {
+    State.chestRewardsRemaining = 0;
+    State.chestReward = null;
+    State.upgradeChoices = [];
+    return false;
+  }
+
+  State.chestRewardsRemaining--;
+  rollChestReward();
+  return true;
 }
 
 // ── Upgrade pool ─────────────────────────────────────────────────────────────

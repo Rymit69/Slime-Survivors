@@ -279,7 +279,8 @@ export function render(
     const inView = Math.abs(chest.x - state.camera.x) < halfW + objectCullPadding &&
                    Math.abs(chest.y - state.camera.y) < halfH + objectCullPadding;
     if (!inView) continue;
-    drawSprite(ctx, 'chest', chest.x, chest.y, 54, 54);
+    const chestSize = chest.kind === 'special' ? 70 : 54;
+    drawSprite(ctx, chest.kind === 'special' ? 'chest_special' : 'chest', chest.x, chest.y, chestSize, chestSize);
   }
   renderChestNavigation(ctx, state);
 
@@ -305,7 +306,35 @@ export function render(
                    Math.abs(enemy.y - state.camera.y) < halfH + objectCullPadding;
     if (!inView) continue;
 
-    if (enemy.isBoss) {
+    if (enemy.isBoss && !enemy.isFinalBoss) {
+      const pulse = 0.7 + 0.3 * Math.sin(Date.now() / 220);
+      ctx.save();
+      ctx.shadowColor = '#ffbb22';
+      ctx.shadowBlur = 24 * pulse;
+      ctx.globalAlpha = 0.3 * pulse;
+      ctx.fillStyle = '#ffbb22';
+      ctx.beginPath();
+      ctx.arc(enemy.x, enemy.y, 52, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+      drawSprite(ctx, `skeleton_boss${enemy.animFrame + 1}`, enemy.x, enemy.y, 76, 76, enemy.facingLeft);
+      ctx.font = 'bold 16px "Courier New",monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffcc44';
+      ctx.fillText('☠', enemy.x, enemy.y - 52);
+      const bossBarW = 72;
+      const bossBarY = enemy.y - 45;
+      ctx.fillStyle = '#330000';
+      ctx.fillRect(enemy.x - bossBarW / 2, bossBarY, bossBarW, 6);
+      ctx.fillStyle = '#ff3344';
+      ctx.fillRect(enemy.x - bossBarW / 2, bossBarY, bossBarW * Math.max(0, enemy.currentHP / enemy.maxHP), 6);
+      ctx.restore();
+      continue;
+    }
+
+    if (enemy.isFinalBoss) {
       // Boss bat — pulsing red glow + large sprite
       const pulse = 0.7 + 0.3 * Math.sin(Date.now() / 200);
       ctx.save();

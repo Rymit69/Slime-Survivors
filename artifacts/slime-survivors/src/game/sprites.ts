@@ -16,6 +16,8 @@ const SPRITE_MAP: Record<string, string> = {
   goblin2:         '/sprites/goblin2.png',
   skeleton1:       '/sprites/skeleton1.png',
   skeleton2:       '/sprites/skeleton2.png',
+  skeleton_boss1:  '/sprites/skeleton_boss1.png',
+  skeleton_boss2:  '/sprites/skeleton_boss2.png',
   ogre1:           '/sprites/ogre1.png',
   ogre2:           '/sprites/ogre2.png',
   grass:           '/sprites/grass.png',
@@ -28,6 +30,7 @@ const SPRITE_MAP: Record<string, string> = {
   flower2:         '/sprites/flower2.png',
   flower3:         '/sprites/flower3.png',
   chest:           '/sprites/chest.png',
+  chest_special:   '/sprites/chest_special.png',
   chest_arrow:     '/sprites/chest_arrow.png',
 };
 

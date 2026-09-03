@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { startGameLoop, stopGameLoop, resumeGameLoop } from './gameLoop';
+import { startGameLoop, stopGameLoop, resumeGameLoop, advanceChestReward } from './gameLoop';
 import { initInput, teardownInput, Input } from './input';
 import { State, GameStatus, UpgradeOptions } from './state';
 import { Difficulty, HeroType } from './entities';
@@ -333,6 +333,11 @@ export function Game() {
 
   const onUpgrade = (upgrade: UpgradeOptions) => {
     upgrade.apply(State);
+    if (advanceChestReward()) {
+      setUpgrades([...State.upgradeChoices]);
+      setGameStatus('CHEST');
+      return;
+    }
     State.invincibilityTimer = 3.0;
     setGameStatus('PLAYING');
     if (canvasRef.current) resumeGameLoop(canvasRef.current, handleStateChange);
@@ -342,6 +347,11 @@ export function Game() {
     if (State.chestReward?.type === 'artifact') {
       State.collectedArtifactIds.push(State.chestReward.artifact.id);
       State.chestReward = null;
+    }
+    if (advanceChestReward()) {
+      setUpgrades([...State.upgradeChoices]);
+      setGameStatus('CHEST');
+      return;
     }
     State.invincibilityTimer = 2.0;
     setGameStatus('PLAYING');
@@ -716,11 +726,11 @@ export function Game() {
       {/* ── CHEST overlay — artifact ── */}
       {gameStatus === 'CHEST' && State.chestReward?.type === 'artifact' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 select-none">
-          <img src={assetUrl('/sprites/chest.png')} alt="" draggable={false}
+           <img src={assetUrl(State.currentChestKind === 'special' ? '/sprites/chest_special.png' : '/sprites/chest.png')} alt="" draggable={false}
             style={{ width:64, height:64, imageRendering:'pixelated', objectFit:'contain' }} />
           <h2 className="font-mono font-black text-center mb-2 mt-2"
             style={{ fontSize:'clamp(1.4rem,6vw,2.2rem)', color:'#ffd700', textShadow:'0 3px 0 #886600' }}>
-            {t('artifactFound')}
+             {t('artifactFound')}{State.chestRewardsRemaining > 1 ? ` ×${State.chestRewardsRemaining}` : ''}
           </h2>
           <div className="font-mono font-black text-center px-8 py-6 rounded-2xl mb-6"
             style={{ background:'linear-gradient(135deg,#2a1a4a,#1a0e3a)', border:'2px solid #8844ff',
@@ -749,11 +759,11 @@ export function Game() {
       {/* ── CHEST overlay — upgrade choices ── */}
       {gameStatus === 'CHEST' && !State.chestReward && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 select-none">
-          <img src={assetUrl('/sprites/chest.png')} alt="" draggable={false}
+           <img src={assetUrl(State.currentChestKind === 'special' ? '/sprites/chest_special.png' : '/sprites/chest.png')} alt="" draggable={false}
             style={{ width:64, height:64, imageRendering:'pixelated', objectFit:'contain' }} />
           <h2 className="font-mono font-black text-center mb-6 mt-2"
             style={{ fontSize:'clamp(1.4rem,6vw,2.2rem)', color:'#ffd700', textShadow:'0 3px 0 #886600' }}>
-            {t('chest')}
+            {t('chest')}{State.chestRewardsRemaining > 1 ? ` ×${State.chestRewardsRemaining}` : ''}
           </h2>
           <UpgradeButtons upgrades={upgrades} onPick={onUpgrade} onInfo={showInfo} />
         </div>

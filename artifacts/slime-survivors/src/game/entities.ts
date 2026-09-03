@@ -44,7 +44,8 @@ export interface Enemy extends Entity {
   animFrame: number;
   animTimer: number;
   facingLeft: boolean;
-  isBoss?: boolean;   // immortal boss — never removed, triggers WIN on kill
+  isBoss?: boolean;
+  isFinalBoss?: boolean; // the 30-minute boss is immortal and triggers WIN
 }
 
 export interface Projectile extends Entity {
@@ -87,6 +88,7 @@ export interface Apple extends Entity {
 
 export interface Chest extends Entity {
   opened: boolean;
+  kind: 'normal' | 'special';
 }
 
 export interface ArtifactDef {
