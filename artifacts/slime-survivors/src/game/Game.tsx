@@ -1,7 +1,16 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { startGameLoop, stopGameLoop, resumeGameLoop, advanceChestReward } from './gameLoop';
+import {
+  startGameLoop,
+  stopGameLoop,
+  resumeGameLoop,
+  advanceChestReward,
+  canUseRemovalAction,
+  getRunAbilityTargets,
+  increaseAbilityMaxLevel,
+  removeAbilityFromRun,
+} from './gameLoop';
 import { initInput, teardownInput, Input } from './input';
-import { State, GameStatus, UpgradeOptions } from './state';
+import { AbilityTarget, State, GameStatus, UpgradeOptions } from './state';
 import { Difficulty, HeroType } from './entities';
 import { render } from './renderer';
 import { Lang, getLang, setLang, t } from './lang';
@@ -260,6 +269,7 @@ export function Game() {
   const [musicVol, setMusicVol] = useState(0.5);
   const [pauseSettingsOpen, setPauseSettingsOpen] = useState(false);
   const [info, setInfo] = useState<InfoData | null>(null);
+  const [removalStep, setRemovalStep] = useState<'idle' | 'remove' | 'boost'>('idle');
 
   // Background music
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -328,7 +338,12 @@ export function Game() {
   }, [screen, spritesReady, handleStateChange, difficulty, hero]);
 
   const onStartGame = (d: Difficulty) => { setDifficulty(d); setScreen('HERO'); };
-  const onPickHero  = (h: HeroType)   => { setHero(h); tryPlayMusic(); setScreen('GAME'); };
+  const onPickHero  = (h: HeroType)   => {
+    setHero(h);
+    setRemovalStep('idle');
+    tryPlayMusic();
+    setScreen('GAME');
+  };
   const onGoMenu    = () => { setPauseSettingsOpen(false); setScreen('MENU'); };
 
   const onUpgrade = (upgrade: UpgradeOptions) => {
@@ -354,6 +369,22 @@ export function Game() {
       return;
     }
     State.invincibilityTimer = 2.0;
+    setGameStatus('PLAYING');
+    if (canvasRef.current) resumeGameLoop(canvasRef.current, handleStateChange);
+  };
+
+  const onStartRemoval = () => {
+    if (canUseRemovalAction()) setRemovalStep('remove');
+  };
+
+  const onRemoveAbility = (ability: AbilityTarget) => {
+    if (removeAbilityFromRun(ability.id)) setRemovalStep('boost');
+  };
+
+  const onBoostAbility = (ability: AbilityTarget) => {
+    if (!increaseAbilityMaxLevel(ability.id)) return;
+    setRemovalStep('idle');
+    State.invincibilityTimer = 3.0;
     setGameStatus('PLAYING');
     if (canvasRef.current) resumeGameLoop(canvasRef.current, handleStateChange);
   };
@@ -714,12 +745,76 @@ export function Game() {
 
       {/* ── LEVEL UP overlay ── */}
       {gameStatus === 'LEVEL_UP' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 select-none">
-          <h2 className="font-mono font-black text-center mb-6"
-            style={{ fontSize:'clamp(1.8rem,8vw,3rem)', color:'#ffd700', textShadow:'0 4px 0 #996600', letterSpacing:'0.08em' }}>
-            {t('levelUp')}
-          </h2>
-            <UpgradeButtons upgrades={upgrades} onPick={onUpgrade} onInfo={showInfo} />
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 select-none overflow-y-auto"
+          style={{ paddingTop: 18, paddingBottom: 18 }}>
+          {removalStep === 'idle' && (
+            <>
+              <h2 className="font-mono font-black text-center mb-5"
+                style={{ fontSize:'clamp(1.8rem,8vw,3rem)', color:'#ffd700', textShadow:'0 4px 0 #996600', letterSpacing:'0.08em', whiteSpace:'pre-line' }}>
+                {t('levelUp')}
+              </h2>
+              <UpgradeButtons upgrades={upgrades} onPick={onUpgrade} onInfo={showInfo} />
+              <button
+                type="button"
+                onClick={onStartRemoval}
+                disabled={!canUseRemovalAction()}
+                className="mt-3 flex items-center justify-center gap-3 font-mono font-black text-white transition-all active:scale-95"
+                style={{
+                  width: 'calc(100% - 32px)',
+                  maxWidth: 380,
+                  minHeight: 72,
+                  padding: '8px 18px',
+                  borderRadius: 18,
+                  background: canUseRemovalAction()
+                    ? 'linear-gradient(180deg,rgba(255,92,92,0.95),rgba(178,26,42,0.95))'
+                    : 'linear-gradient(180deg,rgba(110,110,120,0.75),rgba(54,54,64,0.75))',
+                  border: `3px solid ${canUseRemovalAction() ? '#ff4242' : '#777784'}`,
+                  boxShadow: `0 5px 0 ${canUseRemovalAction() ? '#8c1420' : '#33333d'}`,
+                  opacity: State.removalActionUsed ? 0.62 : 1,
+                }}
+              >
+                <img src={assetUrl('/ui/remove-ability.png')} alt="" draggable={false}
+                  style={{ width: 48, height: 48, imageRendering: 'pixelated' }} />
+                <span style={{ fontSize: 'clamp(0.8rem,4vw,1.05rem)', letterSpacing: '0.08em' }}>
+                  {State.removalActionUsed ? t('removeAbilityUsed') :
+                    canUseRemovalAction() ? t('removeAbility') : t('removeAbilityNeedTwo')}
+                </span>
+              </button>
+            </>
+          )}
+
+          {removalStep === 'remove' && (
+            <>
+              <h2 className="font-mono font-black text-center mb-3"
+                style={{ fontSize:'clamp(1.5rem,7vw,2.4rem)', color:'#ff7777', textShadow:'0 4px 0 #8c1420', letterSpacing:'0.08em' }}>
+                {t('removeAbilityTitle')}
+              </h2>
+              <p className="font-mono text-center px-6 mb-4"
+                style={{ color:'#ffe0e0', fontSize:'clamp(0.78rem,3.5vw,0.98rem)' }}>
+                {t('removeAbilityDescription')}
+              </p>
+              <AbilityTargetList abilities={getRunAbilityTargets()} mode="remove" onPick={onRemoveAbility} />
+              <button type="button" onClick={() => setRemovalStep('idle')}
+                className="mt-4 font-mono font-black text-white"
+                style={{ ...BtnSecondary, width: 180 }}>
+                {t('removeAbilityCancel')}
+              </button>
+            </>
+          )}
+
+          {removalStep === 'boost' && (
+            <>
+              <h2 className="font-mono font-black text-center mb-3"
+                style={{ fontSize:'clamp(1.4rem,6vw,2.2rem)', color:'#ffd15a', textShadow:'0 4px 0 #8c6414', letterSpacing:'0.04em' }}>
+                {t('removeAbilityTitle')}
+              </h2>
+              <p className="font-mono text-center px-6 mb-4"
+                style={{ color:'#fff1b0', fontSize:'clamp(0.78rem,3.5vw,0.98rem)' }}>
+                {t('chooseAbilityToBoost')}
+              </p>
+              <AbilityTargetList abilities={getRunAbilityTargets()} mode="boost" onPick={onBoostAbility} />
+            </>
+          )}
         </div>
       )}
 
@@ -883,6 +978,53 @@ function StatLine({ label, value, color }: { label: string; value: string; color
   return (
     <div style={{ color:'#aaa', fontSize:'clamp(0.85rem,3.5vw,1rem)' }}>
       {label}: <span style={{ color, fontWeight:900 }}>{value}</span>
+    </div>
+  );
+}
+
+function AbilityTargetList({
+  abilities,
+  mode,
+  onPick,
+}: {
+  abilities: AbilityTarget[];
+  mode: 'remove' | 'boost';
+  onPick: (ability: AbilityTarget) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 w-full px-4" style={{ maxWidth: 380 }}>
+      {abilities.map((ability) => {
+        const color = CARD_COLORS[ability.kind];
+        return (
+          <button
+            key={ability.id}
+            type="button"
+            onClick={() => onPick(ability)}
+            className="flex items-center justify-between gap-3 text-left font-mono font-black text-white transition-all active:scale-95"
+            style={{
+              minHeight: 64,
+              padding: '10px 15px',
+              borderRadius: 15,
+              background: 'linear-gradient(135deg,#293b70,#17244b)',
+              border: `3px solid ${mode === 'remove' ? '#ff5b68' : color}`,
+              boxShadow: `0 4px 0 ${mode === 'remove' ? '#8c1420' : `${color}66`}`,
+            }}
+          >
+            <span style={{ fontSize: 'clamp(0.78rem,3.5vw,1rem)', whiteSpace: 'pre-line', lineHeight: 1.1 }}>
+              {ability.label}
+            </span>
+            <span style={{ color: mode === 'remove' ? '#ff9ba3' : '#fff1a8', fontSize: '0.72rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
+              {mode === 'remove'
+                ? '✕'
+                : `${t('removeAbilityLevelBonus')}`}
+              <br />
+              <span style={{ color: '#d6e3ff' }}>
+                {t('upgradeLevel')} {ability.level} / {ability.maxLevel}
+              </span>
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

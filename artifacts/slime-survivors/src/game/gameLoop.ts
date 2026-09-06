@@ -1,4 +1,4 @@
-import { GameState, State, UpgradeOptions } from './state';
+import { AbilityTarget, GameState, State, UpgradeOptions } from './state';
 import { OrbColor, EnemyType, Difficulty, HeroType, MiniClone } from './entities';
 import { Input } from './input';
 import { render } from './renderer';
@@ -21,6 +21,12 @@ const weapons = createWeapons();
 const BASE_MAX_HP = 100;
 const BASE_SIZE = 20;
 const ANIM_SPEED = 0.2;
+
+// A polynomial XP curve: each level costs more, but growth is not geometric.
+export function getXpRequiredForLevel(level: number): number {
+  const step = Math.max(0, level - 1);
+  return 100 + step * 70 + step * step * 5;
+}
 
 // ── Difficulty helpers ───────────────────────────────────────────────────────
 // Enemy spawn rate is measured relative to Easy: 1× / 2× / 3×.
@@ -67,7 +73,7 @@ export function startGameLoop(
   State.kills = 0;
   State.level = 1;
   State.xp = 0;
-  State.xpNeeded = 100;
+  State.xpNeeded = getXpRequiredForLevel(1);
   State.difficulty = difficulty;
   State.invincibilityTimer = 0;
 
@@ -100,6 +106,9 @@ export function startGameLoop(
   State.unlockedWeapons = [1];
   State.weaponLevels = { 1: 1 };
   State.upgradeLevels = {};
+  State.removedUpgradeIds = [];
+  State.upgradeMaxLevelBonuses = {};
+  State.removalActionUsed = false;
   State.bossSkeletonSpawned = false;
   State.lastEnemySpawnTime = 0;
   State.shakeTime = 0;
@@ -254,7 +263,7 @@ function update(
     State.bossSkeletonSpawned = true;
     const angle = Math.random() * Math.PI * 2;
     const distance = Math.max(width, height) / 2 + 260;
-    const skeletonBossHP = 80 * 5;
+    const skeletonBossHP = 80 * 50;
     State.enemies.push({
       id: 'boss_skeleton_6m',
       type: 'skeleton',
@@ -594,7 +603,7 @@ function update(
   if (State.xp >= State.xpNeeded) {
     State.xp -= State.xpNeeded;
     State.level++;
-    State.xpNeeded = State.level * 100;
+    State.xpNeeded = getXpRequiredForLevel(State.level);
     State.upgradeChoices = generateUpgrades();
     State.chestReward = null;
     State.status = 'LEVEL_UP';
@@ -629,6 +638,86 @@ export function advanceChestReward(): boolean {
   return true;
 }
 
+const ABILITY_LABEL_KEYS: Record<string, Parameters<typeof t>[0]> = {
+  dmg: 'upgDmg',
+  atk_spd: 'upgAtkSpd',
+  move_spd: 'upgMoveSpd',
+  hp: 'upgHp',
+  proj: 'upgProj',
+  shrink: 'upgShrink',
+  split: 'upgSplit',
+  weapon_1: 'weaponBolt',
+  weapon_2: 'weaponSpray',
+  weapon_3: 'weaponWeb',
+};
+
+function getAbilityMaxLevel(state: GameState, id: string): number {
+  if (id === 'heal') return 1;
+  return MAX_UPGRADE_LEVEL + (state.upgradeMaxLevelBonuses[id] ?? 0);
+}
+
+function isUpgradeRemoved(state: GameState, id: string): boolean {
+  return state.removedUpgradeIds.includes(id);
+}
+
+export function getRunAbilityTargets(): AbilityTarget[] {
+  const targets: AbilityTarget[] = [];
+  const seen = new Set<string>();
+
+  for (const [id, level] of Object.entries(State.upgradeLevels)) {
+    if (level <= 0 || id === 'heal' || isUpgradeRemoved(State, id) || !ABILITY_LABEL_KEYS[id]) continue;
+    targets.push({
+      id,
+      label: t(ABILITY_LABEL_KEYS[id]),
+      kind: id === 'split' ? 'mini' : 'stat',
+      level,
+      maxLevel: getAbilityMaxLevel(State, id),
+    });
+    seen.add(id);
+  }
+
+  for (const weaponId of State.unlockedWeapons) {
+    const id = `weapon_${weaponId}`;
+    if (seen.has(id) || isUpgradeRemoved(State, id)) continue;
+    targets.push({
+      id,
+      label: t(ABILITY_LABEL_KEYS[id]),
+      kind: 'weapon',
+      level: getWeaponLevel(State, weaponId),
+      maxLevel: getAbilityMaxLevel(State, id),
+    });
+    seen.add(id);
+  }
+
+  return targets;
+}
+
+export function canUseRemovalAction(): boolean {
+  return !State.removalActionUsed && getRunAbilityTargets().length >= 2;
+}
+
+export function removeAbilityFromRun(id: string): boolean {
+  const target = getRunAbilityTargets().find(ability => ability.id === id);
+  if (!target || id === 'heal' || State.removedUpgradeIds.includes(id)) return false;
+
+  State.removedUpgradeIds.push(id);
+  if (id.startsWith('weapon_')) {
+    const weaponId = Number(id.slice('weapon_'.length));
+    State.unlockedWeapons = State.unlockedWeapons.filter(value => value !== weaponId);
+    delete State.weaponLevels[weaponId];
+  }
+  return true;
+}
+
+export function increaseAbilityMaxLevel(id: string): boolean {
+  const target = getRunAbilityTargets().find(ability => ability.id === id);
+  if (!target || id === 'heal' || State.removalActionUsed) return false;
+
+  State.upgradeMaxLevelBonuses[id] = (State.upgradeMaxLevelBonuses[id] ?? 0) + 5;
+  State.removalActionUsed = true;
+  return true;
+}
+
 // ── Upgrade pool ─────────────────────────────────────────────────────────────
 function createUpgrade(
   state: GameState,
@@ -637,13 +726,15 @@ function createUpgrade(
   labelKey: Parameters<typeof t>[0],
   apply: (state: GameState) => void,
 ): UpgradeOptions | null {
+  if (isUpgradeRemoved(state, id)) return null;
   const level = (state.upgradeLevels[id] ?? 0) + 1;
-  if (level > MAX_UPGRADE_LEVEL) return null;
+  const maxLevel = getAbilityMaxLevel(state, id);
+  if (level > maxLevel) return null;
   return {
     id,
     kind,
     level,
-    maxLevel: MAX_UPGRADE_LEVEL,
+    maxLevel,
     label: t(labelKey),
     apply: s => {
       apply(s);
@@ -653,13 +744,16 @@ function createUpgrade(
 }
 
 function createWeaponUpgrade(state: GameState, weaponId: number, labelKey: Parameters<typeof t>[0]): UpgradeOptions | null {
+  const id = `weapon_${weaponId}`;
+  if (isUpgradeRemoved(state, id)) return null;
   const level = getWeaponLevel(state, weaponId) + 1;
-  if (level > MAX_UPGRADE_LEVEL) return null;
+  const maxLevel = getAbilityMaxLevel(state, id);
+  if (level > maxLevel) return null;
   return {
-    id: `weapon_${weaponId}`,
+    id,
     kind: 'weapon',
     level,
-    maxLevel: MAX_UPGRADE_LEVEL,
+    maxLevel,
     label: t(labelKey),
     apply: s => { s.weaponLevels[weaponId] = level; },
   };
@@ -708,14 +802,14 @@ function generateUpgrades(): UpgradeOptions[] {
       s.miniClones.push(clone);
     });
 
-  if (!State.unlockedWeapons.includes(2) && State.level >= 5)
+  if (!State.unlockedWeapons.includes(2) && !isUpgradeRemoved(State, 'weapon_2') && State.level >= 5)
     pool.push({
-      id: 'weapon_2', kind: 'weapon', level: 1, maxLevel: MAX_UPGRADE_LEVEL, label: t('upgSlimeSpray'),
+      id: 'weapon_2', kind: 'weapon', level: 1, maxLevel: getAbilityMaxLevel(State, 'weapon_2'), label: t('upgSlimeSpray'),
       apply: s => { s.unlockedWeapons.push(2); s.weaponLevels[2] = 1; },
     });
-  if (!State.unlockedWeapons.includes(3) && State.level >= 10)
+  if (!State.unlockedWeapons.includes(3) && !isUpgradeRemoved(State, 'weapon_3') && State.level >= 10)
     pool.push({
-      id: 'weapon_3', kind: 'weapon', level: 1, maxLevel: MAX_UPGRADE_LEVEL, label: t('upgStickyWeb'),
+      id: 'weapon_3', kind: 'weapon', level: 1, maxLevel: getAbilityMaxLevel(State, 'weapon_3'), label: t('upgStickyWeb'),
       apply: s => { s.unlockedWeapons.push(3); s.weaponLevels[3] = 1; },
     });
 

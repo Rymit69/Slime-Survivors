@@ -11,6 +11,14 @@ export interface UpgradeOptions {
   apply: (state: GameState) => void;
 }
 
+export interface AbilityTarget {
+  id: string;
+  label: string;
+  kind: UpgradeOptions['kind'];
+  level: number;
+  maxLevel: number;
+}
+
 export interface ChestReward {
   type: 'artifact';
   artifact: ArtifactDef;
@@ -50,6 +58,9 @@ export class GameState {
   unlockedWeapons: number[] = [1];
   weaponLevels: Record<number, number> = { 1: 1 };
   upgradeLevels: Record<string, number> = {};
+  removedUpgradeIds: string[] = [];
+  upgradeMaxLevelBonuses: Record<string, number> = {};
+  removalActionUsed: boolean = false;
 
   stats = {
     damageMultiplier: 1.0,
