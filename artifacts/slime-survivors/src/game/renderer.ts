@@ -95,9 +95,9 @@ function drawRotatedSprite(
 }
 
 function trailPalette(weaponId: number) {
-  if (weaponId === 4) return { base: '#d93624', glow: '#ff9a28', spark: '#ffe08a' };
-  if (weaponId === 5) return { base: '#258f45', glow: '#72ff68', spark: '#c7ff86' };
-  return { base: '#2b73c9', glow: '#75d9ff', spark: '#d8f7ff' };
+  if (weaponId === 4) return { base: '#b82d24', glow: '#ef5b2a', spark: '#ffb347', sprite: 'effect_fire' };
+  if (weaponId === 5) return { base: '#258541', glow: '#54d957', spark: '#a8ff75', sprite: 'effect_poison' };
+  return { base: '#2465ad', glow: '#45b9ef', spark: '#bdefff', sprite: 'effect_ice' };
 }
 
 function renderTrail(ctx: CanvasRenderingContext2D, state: GameState) {
@@ -110,9 +110,11 @@ function renderTrail(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.globalAlpha = 0.28;
+  // A narrow underlay makes the trail readable without producing the large
+  // translucent snake/ribbon seen in the reference screenshot.
+  ctx.globalAlpha = 0.32;
   ctx.strokeStyle = palette.glow;
-  ctx.lineWidth = width + 10;
+  ctx.lineWidth = Math.max(2, width * 0.28);
   ctx.beginPath();
   points.forEach((segment, index) => {
     if (index === 0) ctx.moveTo(segment.x, segment.y);
@@ -120,34 +122,21 @@ function renderTrail(ctx: CanvasRenderingContext2D, state: GameState) {
   });
   ctx.stroke();
 
-  for (const segment of points) {
+  for (let index = 0; index < points.length; index++) {
+    const segment = points[index];
     const alpha = Math.max(0.12, 1 - segment.age / segment.maxAge);
-    ctx.globalAlpha = alpha * 0.78;
+    const stampRadius = Math.max(2.5, width * 0.22);
+    ctx.globalAlpha = alpha * 0.72;
     ctx.fillStyle = palette.base;
     ctx.beginPath();
-    ctx.arc(segment.x, segment.y, width / 2, 0, Math.PI * 2);
+    ctx.arc(segment.x, segment.y, stampRadius, 0, Math.PI * 2);
     ctx.fill();
 
-    const pulse = Math.sin(Date.now() / 150 + segment.x * 0.03 + segment.y * 0.02);
-    ctx.globalAlpha = alpha * 0.85;
-    ctx.fillStyle = palette.spark;
-    if (weaponId === 4) {
-      ctx.fillRect(segment.x - 3, segment.y - width * 0.32 - pulse * 3, 5, 8);
-      ctx.fillRect(segment.x + width * 0.22, segment.y - 2 + pulse * 2, 4, 6);
-    } else if (weaponId === 5) {
-      ctx.beginPath();
-      ctx.arc(segment.x - width * 0.2, segment.y - 4 - pulse * 2, 3, 0, Math.PI * 2);
-      ctx.arc(segment.x + width * 0.2, segment.y + 3 + pulse * 2, 2, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.beginPath();
-      ctx.moveTo(segment.x, segment.y - width * 0.35);
-      ctx.lineTo(segment.x + 5, segment.y);
-      ctx.lineTo(segment.x, segment.y + width * 0.35);
-      ctx.lineTo(segment.x - 5, segment.y);
-      ctx.closePath();
-      ctx.fill();
-    }
+    // Use the supplied pixel-art effect textures on the road itself. They are
+    // intentionally small and spaced so the trail reads as individual effects.
+    const effectSize = Math.max(10, Math.min(17, width * 0.95));
+    ctx.globalAlpha = alpha * 0.9;
+    drawSprite(ctx, palette.sprite, segment.x, segment.y, effectSize, effectSize);
   }
   ctx.restore();
 }
@@ -156,27 +145,37 @@ function renderEnemyStatusFx(ctx: CanvasRenderingContext2D, enemy: GameState['en
   const time = Date.now() / 180;
   if (enemy.burningTimer > 0) {
     ctx.save();
-    ctx.globalAlpha = 0.9;
-    for (let i = 0; i < 3; i++) {
-      const phase = time + i * 2.1;
-      const x = enemy.x + Math.cos(phase) * (enemy.size * 0.8);
-      const y = enemy.y - enemy.size * 0.75 + Math.sin(phase * 1.4) * 5;
-      drawSprite(ctx, 'effect_fire', x, y, 18, 18);
+    ctx.globalAlpha = 0.95;
+    ctx.shadowColor = '#ff482c';
+    ctx.shadowBlur = 5;
+    for (let i = 0; i < 4; i++) {
+      const phase = time * 1.15 + i * Math.PI / 2;
+      const radius = enemy.size * 0.72;
+      drawSprite(
+        ctx,
+        'effect_fire',
+        enemy.x + Math.cos(phase) * radius,
+        enemy.y - enemy.size * 0.7 + Math.sin(phase) * radius * 0.5,
+        17,
+        17,
+      );
     }
     ctx.restore();
   }
   if (enemy.poisoned) {
     ctx.save();
-    ctx.globalAlpha = 0.8;
-    for (let i = 0; i < 3; i++) {
-      const phase = time * 0.8 + i * 2;
+    ctx.globalAlpha = 0.9;
+    ctx.shadowColor = '#54e75e';
+    ctx.shadowBlur = 4;
+    for (let i = 0; i < 4; i++) {
+      const phase = time * 0.7 + i * Math.PI / 2;
       drawSprite(
         ctx,
         'effect_poison',
-        enemy.x + Math.cos(phase) * (enemy.size + 5),
-        enemy.y - enemy.size * 0.5 + Math.sin(phase) * 8,
-        18,
-        18,
+        enemy.x + Math.cos(phase) * (enemy.size * 0.85),
+        enemy.y - enemy.size * 0.4 + Math.sin(phase) * enemy.size * 0.5,
+        17,
+        17,
       );
     }
     ctx.restore();
@@ -190,7 +189,20 @@ function renderEnemyStatusFx(ctx: CanvasRenderingContext2D, enemy: GameState['en
     ctx.arc(enemy.x, enemy.y, enemy.size + 7, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    drawSprite(ctx, 'effect_ice', enemy.x, enemy.y - enemy.size - 12, 20, 20);
+    ctx.shadowColor = '#4fc8ff';
+    ctx.shadowBlur = 6;
+    const iceRadius = enemy.size * 0.95;
+    for (let i = 0; i < 6; i++) {
+      const phase = -time * 0.65 + i * Math.PI / 3;
+      drawSprite(
+        ctx,
+        'effect_ice',
+        enemy.x + Math.cos(phase) * iceRadius,
+        enemy.y + Math.sin(phase) * iceRadius,
+        18,
+        18,
+      );
+    }
     ctx.restore();
   }
 }

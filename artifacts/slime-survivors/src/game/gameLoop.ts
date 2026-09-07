@@ -347,7 +347,7 @@ function update(
   }
   if (activeTrailWeapon && (Math.abs(State.player.vx) > 5 || Math.abs(State.player.vy) > 5)) {
     const last = State.trailSegments[State.trailSegments.length - 1];
-    const spacing = Math.max(8, State.player.size * 0.45);
+    const spacing = Math.max(10, State.player.size * 0.78);
     if (!last || Math.hypot(last.x - State.player.x, last.y - State.player.y) >= spacing) {
       State.trailSegments.push({
         id: Math.random().toString(),
