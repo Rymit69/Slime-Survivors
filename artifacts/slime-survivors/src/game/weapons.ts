@@ -68,5 +68,26 @@ export const createWeapons = (): Record<number, Weapon> => ({
     fire: (state: GameState, player: Player, enemies: Enemy[]) => {
       // Handled in main loop (passive effect)
     }
+  },
+  4: {
+    id: 4,
+    name: "Fire Trail",
+    baseCooldown: 0,
+    currentCooldown: 0,
+    fire: () => {},
+  },
+  5: {
+    id: 5,
+    name: "Poison Trail",
+    baseCooldown: 0,
+    currentCooldown: 0,
+    fire: () => {},
+  },
+  6: {
+    id: 6,
+    name: "Ice Trail",
+    baseCooldown: 0,
+    currentCooldown: 0,
+    fire: () => {},
   }
 });

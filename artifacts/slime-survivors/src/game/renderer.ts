@@ -4,7 +4,7 @@ import { t } from './lang';
 import { sp } from './sprites';
 import { TILE_SIZE } from './world';
 import { heroColor } from './gameLoop';
-import { getStickyWebRadius } from './upgradeMath';
+import { getStickyWebRadius, getTrailWeaponId, getTrailWidth } from './upgradeMath';
 
 const BASE_MAX_HP = 100;
 
@@ -92,6 +92,107 @@ function drawRotatedSprite(
     ctx.drawImage(img, -size / 2, -size / 2, size, size);
   }
   ctx.restore();
+}
+
+function trailPalette(weaponId: number) {
+  if (weaponId === 4) return { base: '#d93624', glow: '#ff9a28', spark: '#ffe08a' };
+  if (weaponId === 5) return { base: '#258f45', glow: '#72ff68', spark: '#c7ff86' };
+  return { base: '#2b73c9', glow: '#75d9ff', spark: '#d8f7ff' };
+}
+
+function renderTrail(ctx: CanvasRenderingContext2D, state: GameState) {
+  const weaponId = getTrailWeaponId(state);
+  if (!weaponId || state.trailSegments.length === 0) return;
+  const palette = trailPalette(weaponId);
+  const width = getTrailWidth(state, weaponId);
+  const points = state.trailSegments;
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.globalAlpha = 0.28;
+  ctx.strokeStyle = palette.glow;
+  ctx.lineWidth = width + 10;
+  ctx.beginPath();
+  points.forEach((segment, index) => {
+    if (index === 0) ctx.moveTo(segment.x, segment.y);
+    else ctx.lineTo(segment.x, segment.y);
+  });
+  ctx.stroke();
+
+  for (const segment of points) {
+    const alpha = Math.max(0.12, 1 - segment.age / segment.maxAge);
+    ctx.globalAlpha = alpha * 0.78;
+    ctx.fillStyle = palette.base;
+    ctx.beginPath();
+    ctx.arc(segment.x, segment.y, width / 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    const pulse = Math.sin(Date.now() / 150 + segment.x * 0.03 + segment.y * 0.02);
+    ctx.globalAlpha = alpha * 0.85;
+    ctx.fillStyle = palette.spark;
+    if (weaponId === 4) {
+      ctx.fillRect(segment.x - 3, segment.y - width * 0.32 - pulse * 3, 5, 8);
+      ctx.fillRect(segment.x + width * 0.22, segment.y - 2 + pulse * 2, 4, 6);
+    } else if (weaponId === 5) {
+      ctx.beginPath();
+      ctx.arc(segment.x - width * 0.2, segment.y - 4 - pulse * 2, 3, 0, Math.PI * 2);
+      ctx.arc(segment.x + width * 0.2, segment.y + 3 + pulse * 2, 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(segment.x, segment.y - width * 0.35);
+      ctx.lineTo(segment.x + 5, segment.y);
+      ctx.lineTo(segment.x, segment.y + width * 0.35);
+      ctx.lineTo(segment.x - 5, segment.y);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function renderEnemyStatusFx(ctx: CanvasRenderingContext2D, enemy: GameState['enemies'][number]) {
+  const time = Date.now() / 180;
+  if (enemy.burningTimer > 0) {
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    for (let i = 0; i < 3; i++) {
+      const phase = time + i * 2.1;
+      const x = enemy.x + Math.cos(phase) * (enemy.size * 0.8);
+      const y = enemy.y - enemy.size * 0.75 + Math.sin(phase * 1.4) * 5;
+      drawSprite(ctx, 'effect_fire', x, y, 18, 18);
+    }
+    ctx.restore();
+  }
+  if (enemy.poisoned) {
+    ctx.save();
+    ctx.globalAlpha = 0.8;
+    for (let i = 0; i < 3; i++) {
+      const phase = time * 0.8 + i * 2;
+      drawSprite(
+        ctx,
+        'effect_poison',
+        enemy.x + Math.cos(phase) * (enemy.size + 5),
+        enemy.y - enemy.size * 0.5 + Math.sin(phase) * 8,
+        18,
+        18,
+      );
+    }
+    ctx.restore();
+  }
+  if (enemy.frozenTimer > 0 || enemy.chilledTimer > 0) {
+    ctx.save();
+    ctx.strokeStyle = enemy.frozenTimer > 0 ? '#b9f2ff' : '#5bbcff';
+    ctx.fillStyle = enemy.frozenTimer > 0 ? 'rgba(170,235,255,0.22)' : 'rgba(80,170,255,0.12)';
+    ctx.lineWidth = enemy.frozenTimer > 0 ? 3 : 2;
+    ctx.beginPath();
+    ctx.arc(enemy.x, enemy.y, enemy.size + 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    drawSprite(ctx, 'effect_ice', enemy.x, enemy.y - enemy.size - 12, 20, 20);
+    ctx.restore();
+  }
 }
 
 function renderChestNavigation(ctx: CanvasRenderingContext2D, state: GameState) {
@@ -257,6 +358,9 @@ export function render(
     }
   }
 
+  // ── 3b. Elemental trail ─────────────────────────────────────────────────────
+  renderTrail(ctx, state);
+
   // ── 4. Apples on ground ─────────────────────────────────────────────────────
   for (const apple of state.apples) {
     drawSprite(ctx, 'apple', apple.x, apple.y + Math.sin(Date.now() / 500) * 3, 22, 22);
@@ -330,6 +434,7 @@ export function render(
       ctx.fillRect(enemy.x - bossBarW / 2, bossBarY, bossBarW, 6);
       ctx.fillStyle = '#ff3344';
       ctx.fillRect(enemy.x - bossBarW / 2, bossBarY, bossBarW * Math.max(0, enemy.currentHP / enemy.maxHP), 6);
+      renderEnemyStatusFx(ctx, enemy);
       ctx.restore();
       continue;
     }
@@ -363,6 +468,7 @@ export function render(
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#ff2244';
       ctx.fillText('☠️', enemy.x, enemy.y - 58);
+      renderEnemyStatusFx(ctx, enemy);
       ctx.restore();
       continue;
     }
@@ -371,6 +477,7 @@ export function render(
     const sizes: Record<string, number> = { bat: 40, goblin: 52, skeleton: 52, ogre: 64 };
     const drawS = sizes[enemy.type] ?? 48;
     drawSprite(ctx, sprKey, enemy.x, enemy.y, drawS, drawS, enemy.facingLeft);
+    renderEnemyStatusFx(ctx, enemy);
 
     if (enemy.currentHP < enemy.maxHP) {
       const bw = enemy.size * 2 + 4;

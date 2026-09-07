@@ -1,4 +1,5 @@
 import type { GameState } from './state';
+import type { TrailWeaponId } from './entities';
 
 export const MAX_UPGRADE_LEVEL = 5;
 
@@ -20,4 +21,50 @@ export function getWeaponProjectileSize(state: GameState, weaponId: number): num
 
 export function getStickyWebRadius(state: GameState): number {
   return 120 + (getWeaponLevel(state, 3) - 1) * 20;
+}
+
+export function getTrailWeaponId(state: GameState): TrailWeaponId | null {
+  const id = state.unlockedWeapons.find(weaponId => weaponId >= 4 && weaponId <= 6);
+  return id as TrailWeaponId | undefined ?? null;
+}
+
+export function getTrailLevel(state: GameState, weaponId: TrailWeaponId): number {
+  return getWeaponLevel(state, weaponId);
+}
+
+export function getTrailWidth(state: GameState, weaponId: TrailWeaponId): number {
+  const level = getTrailLevel(state, weaponId);
+  const levelScale = 1 + (level - 1) * 0.14;
+  return state.player.size * (1.35 + 0.15 * (level - 1)) * levelScale;
+}
+
+export function getTrailLifetime(state: GameState, weaponId: TrailWeaponId): number {
+  const level = getTrailLevel(state, weaponId);
+  return 3.5 + (level - 1) * 0.5;
+}
+
+export function getTrailEffectStats(state: GameState, weaponId: TrailWeaponId) {
+  const level = getTrailLevel(state, weaponId);
+  if (weaponId === 4) {
+    return {
+      damagePerSecond: 8 + (level - 1) * 4,
+      duration: 10 + (level - 1) * 2,
+      freezeDuration: 0,
+      slowDuration: 0,
+    };
+  }
+  if (weaponId === 5) {
+    return {
+      damagePerSecond: 5 + (level - 1) * 2,
+      duration: 0,
+      freezeDuration: 0,
+      slowDuration: 0,
+    };
+  }
+  return {
+    damagePerSecond: 0,
+    duration: 0,
+    freezeDuration: 5 + (level - 1) * 0.5,
+    slowDuration: 15 + (level - 1) * 2,
+  };
 }

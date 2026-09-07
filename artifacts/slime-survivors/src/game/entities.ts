@@ -4,6 +4,7 @@ export type OrbColor = 'orange' | 'green' | 'purple';
 export type EnemyType = 'bat' | 'goblin' | 'skeleton' | 'ogre';
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export type HeroType = 'blue' | 'green' | 'purple';
+export type TrailWeaponId = 4 | 5 | 6;
 
 export interface Player extends Entity {
   heroType: HeroType;
@@ -44,8 +45,22 @@ export interface Enemy extends Entity {
   animFrame: number;
   animTimer: number;
   facingLeft: boolean;
+  burningTimer: number;
+  burningDamage: number;
+  burnTickTimer: number;
+  poisoned: boolean;
+  poisonDamage: number;
+  poisonTickTimer: number;
+  frozenTimer: number;
+  chilledTimer: number;
   isBoss?: boolean;
   isFinalBoss?: boolean; // the 30-minute boss is immortal and triggers WIN
+}
+
+export interface TrailSegment extends Entity {
+  weaponId: TrailWeaponId;
+  age: number;
+  maxAge: number;
 }
 
 export interface Projectile extends Entity {

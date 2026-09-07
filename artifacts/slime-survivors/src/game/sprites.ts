@@ -32,6 +32,9 @@ const SPRITE_MAP: Record<string, string> = {
   chest:           '/sprites/chest.png',
   chest_special:   '/sprites/chest_special.png',
   chest_arrow:     '/sprites/chest_arrow.png',
+  effect_fire:     '/sprites/effect_fire.png',
+  effect_poison:   '/sprites/effect_poison.png',
+  effect_ice:      '/sprites/effect_ice.png',
 };
 
 export function loadSprites(base: string = ''): Promise<void> {

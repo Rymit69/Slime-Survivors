@@ -660,6 +660,9 @@ export function Game() {
               {State.unlockedWeapons.includes(1) && <Badge color="#4488ff" border="#2244aa">🔵 {t('weaponBolt')}</Badge>}
               {State.unlockedWeapons.includes(2) && <Badge color="#66ccff" border="#2299aa">{t('effectSlimeSpray')}</Badge>}
               {State.unlockedWeapons.includes(3) && <Badge color="#88cc88" border="#448844">{t('effectStickyWeb')}</Badge>}
+              {State.unlockedWeapons.includes(4) && <Badge color="#ff7744" border="#aa3322">{t('effectFireTrail')}</Badge>}
+              {State.unlockedWeapons.includes(5) && <Badge color="#77ff66" border="#229944">{t('effectPoisonTrail')}</Badge>}
+              {State.unlockedWeapons.includes(6) && <Badge color="#72d9ff" border="#2277aa">{t('effectIceTrail')}</Badge>}
               {State.player.lakeBuffTimer > 0 && <Badge color="#aaddff" border="#336688">{t('effectLakeBuff')} {Math.ceil(State.player.lakeBuffTimer)}s</Badge>}
               {State.miniClones.length > 0 && <Badge color="#aaffcc" border="#44aa66">⚡ {t('miniClone')} ×{State.miniClones.length}</Badge>}
             </div>
@@ -774,7 +777,12 @@ export function Game() {
                 }}
               >
                 <img src={assetUrl('/ui/remove-ability.png')} alt="" draggable={false}
-                  style={{ width: 48, height: 48, imageRendering: 'pixelated' }} />
+                  style={{
+                    width: 48,
+                    height: 48,
+                    imageRendering: 'pixelated',
+                    filter: canUseRemovalAction() ? 'none' : 'grayscale(1) brightness(0.72)',
+                  }} />
                 <span style={{ fontSize: 'clamp(0.8rem,4vw,1.05rem)', letterSpacing: '0.08em' }}>
                   {State.removalActionUsed ? t('removeAbilityUsed') :
                     canUseRemovalAction() ? t('removeAbility') : t('removeAbilityNeedTwo')}
@@ -958,6 +966,9 @@ function upgradeDescKey(id: string): LangKey {
     weapon_1: 'upgSlimeBoltDesc',
     weapon_2: 'upgSlimeSprayDesc',
     weapon_3: 'upgStickyWebDesc',
+    weapon_4: 'upgFireTrailDesc',
+    weapon_5: 'upgPoisonTrailDesc',
+    weapon_6: 'upgIceTrailDesc',
     shrink: 'upgShrinkDesc',
     split: 'upgSplitDesc',
     heal: 'upgHealDesc',

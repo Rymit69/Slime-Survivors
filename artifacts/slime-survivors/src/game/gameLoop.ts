@@ -1,5 +1,5 @@
 import { AbilityTarget, GameState, State, UpgradeOptions } from './state';
-import { OrbColor, EnemyType, Difficulty, HeroType, MiniClone } from './entities';
+import { OrbColor, Enemy, EnemyType, Difficulty, HeroType, MiniClone, TrailWeaponId } from './entities';
 import { Input } from './input';
 import { render } from './renderer';
 import { generateLakes, isInsideLake, generateAppleTrees, TILE_SIZE } from './world';
@@ -12,6 +12,10 @@ import {
   getWeaponLevel,
   getWeaponProjectileSize,
   MAX_UPGRADE_LEVEL,
+  getTrailEffectStats,
+  getTrailLifetime,
+  getTrailWeaponId,
+  getTrailWidth,
 } from './upgradeMath';
 
 let animationFrameId = 0;
@@ -91,6 +95,7 @@ export function startGameLoop(
   State.projectiles = [];
   State.xpOrbs = [];
   State.damageTexts = [];
+  State.trailSegments = [];
   State.apples = [];
   State.chests = [];
   State.chestReward = null;
@@ -153,6 +158,80 @@ function makeLoop(
     }
   }
   return loop;
+}
+
+function trailSegmentTouchesEnemy(
+  segment: { x: number; y: number },
+  enemy: { x: number; y: number; size: number },
+  width: number,
+) {
+  return Math.hypot(segment.x - enemy.x, segment.y - enemy.y) <= width / 2 + enemy.size;
+}
+
+function applyTrailEffect(enemy: Enemy, trailWeaponId: TrailWeaponId) {
+  if (enemy.isFinalBoss) return;
+  const width = getTrailWidth(State, trailWeaponId);
+  const touched = State.trailSegments.some(segment =>
+    segment.weaponId === trailWeaponId && trailSegmentTouchesEnemy(segment, enemy, width)
+  );
+  if (!touched) return;
+
+  const effect = getTrailEffectStats(State, trailWeaponId);
+  if (trailWeaponId === 4) {
+    enemy.burningTimer = Math.max(enemy.burningTimer, effect.duration);
+    enemy.burningDamage = Math.max(enemy.burningDamage, effect.damagePerSecond);
+    if (enemy.burnTickTimer <= 0) enemy.burnTickTimer = 0.1;
+  } else if (trailWeaponId === 5) {
+    enemy.poisoned = true;
+    enemy.poisonDamage = Math.max(enemy.poisonDamage, effect.damagePerSecond);
+  } else if (enemy.frozenTimer <= 0 && enemy.chilledTimer <= 0) {
+    enemy.frozenTimer = effect.freezeDuration;
+    enemy.chilledTimer = effect.freezeDuration + effect.slowDuration;
+  }
+}
+
+function updateEnemyEffects(enemy: Enemy, dt: number) {
+  if (enemy.burningTimer > 0) {
+    enemy.burningTimer -= dt;
+    enemy.burnTickTimer -= dt;
+    if (enemy.burnTickTimer <= 0) {
+      enemy.currentHP -= enemy.burningDamage;
+      enemy.burnTickTimer += 1;
+      State.damageTexts.push({
+        id: Math.random().toString(),
+        x: enemy.x + (Math.random() - 0.5) * 12,
+        y: enemy.y - enemy.size - 8,
+        text: Math.round(enemy.burningDamage).toString(),
+        lifeTime: 0.55,
+        maxLifeTime: 0.55,
+        color: '#ff7733',
+      });
+    }
+    if (enemy.burningTimer <= 0) {
+      enemy.burningTimer = 0;
+      enemy.burningDamage = 0;
+    }
+  }
+
+  if (enemy.poisoned) {
+    enemy.currentHP -= enemy.poisonDamage * dt;
+    enemy.poisonTickTimer -= dt;
+    if (enemy.poisonTickTimer <= 0) {
+      enemy.poisonTickTimer += 0.8;
+      State.damageTexts.push({
+        id: Math.random().toString(),
+        x: enemy.x + (Math.random() - 0.5) * 12,
+        y: enemy.y - enemy.size - 8,
+        text: Math.round(enemy.poisonDamage).toString(),
+        lifeTime: 0.55,
+        maxLifeTime: 0.55,
+        color: '#66ff66',
+      });
+    }
+  }
+
+  if (enemy.frozenTimer > 0) enemy.frozenTimer = Math.max(0, enemy.frozenTimer - dt);
+  if (enemy.chilledTimer > 0) enemy.chilledTimer = Math.max(0, enemy.chilledTimer - dt);
 }
 
 // ── Main update ──────────────────────────────────────────────────────────────
@@ -258,6 +337,29 @@ function update(
   if (State.player.vx < -5) State.player.facingLeft = true;
   else if (State.player.vx > 5) State.player.facingLeft = false;
 
+  // ── 1a. Leave a fading trail behind the slime ───────────────────────────────
+  const activeTrailWeapon = getTrailWeaponId(State);
+  for (let i = State.trailSegments.length - 1; i >= 0; i--) {
+    State.trailSegments[i].age += dt;
+    if (State.trailSegments[i].age >= State.trailSegments[i].maxAge) {
+      State.trailSegments.splice(i, 1);
+    }
+  }
+  if (activeTrailWeapon && (Math.abs(State.player.vx) > 5 || Math.abs(State.player.vy) > 5)) {
+    const last = State.trailSegments[State.trailSegments.length - 1];
+    const spacing = Math.max(8, State.player.size * 0.45);
+    if (!last || Math.hypot(last.x - State.player.x, last.y - State.player.y) >= spacing) {
+      State.trailSegments.push({
+        id: Math.random().toString(),
+        x: State.player.x,
+        y: State.player.y,
+        weaponId: activeTrailWeapon,
+        age: 0,
+        maxAge: getTrailLifetime(State, activeTrailWeapon),
+      });
+    }
+  }
+
   // ── 1b. Skeleton boss at 6 minutes ───────────────────────────────────────────
   if (!State.bossSkeletonSpawned && State.timeSurvived >= 360) {
     State.bossSkeletonSpawned = true;
@@ -278,6 +380,9 @@ function update(
       size: 30,
       vx: 0, vy: 0, slowed: false,
       animFrame: 0, animTimer: 0, facingLeft: false,
+      burningTimer: 0, burningDamage: 0, burnTickTimer: 0,
+      poisoned: false, poisonDamage: 5, poisonTickTimer: 0,
+      frozenTimer: 0, chilledTimer: 0,
     });
     State.damageTexts.push({
       id: Math.random().toString(),
@@ -307,6 +412,9 @@ function update(
       vx: 0, vy: 0,
       slowed: false,
       animFrame: 0, animTimer: 0, facingLeft: false,
+      burningTimer: 0, burningDamage: 0, burnTickTimer: 0,
+      poisoned: false, poisonDamage: 5, poisonTickTimer: 0,
+      frozenTimer: 0, chilledTimer: 0,
     });
     State.damageTexts.push({
       id: Math.random().toString(),
@@ -373,6 +481,9 @@ function update(
         speed, damagePerSec: dmg, xp, size,
         vx: 0, vy: 0, slowed: false,
         animFrame: 0, animTimer: Math.random() * ANIM_SPEED, facingLeft: false,
+        burningTimer: 0, burningDamage: 0, burnTickTimer: 0,
+        poisoned: false, poisonDamage: 5, poisonTickTimer: 0,
+        frozenTimer: 0, chilledTimer: 0,
       });
     }
   }
@@ -382,8 +493,14 @@ function update(
   const webRadius = getStickyWebRadius(State);
   for (let i = State.enemies.length - 1; i >= 0; i--) {
     const e = State.enemies[i];
-    e.slowed = !e.isFinalBoss && hasWeb && Math.hypot(State.player.x - e.x, State.player.y - e.y) <= webRadius;
-    const spd = e.slowed ? e.speed * 0.5 : e.speed;
+    if (activeTrailWeapon) applyTrailEffect(e, activeTrailWeapon);
+    updateEnemyEffects(e, dt);
+    const webSlowed = !e.isFinalBoss && hasWeb &&
+      Math.hypot(State.player.x - e.x, State.player.y - e.y) <= webRadius;
+    const frozen = !e.isFinalBoss && e.frozenTimer > 0;
+    const chilled = !e.isFinalBoss && e.chilledTimer > 0;
+    e.slowed = webSlowed || chilled || frozen;
+    const spd = frozen ? 0 : e.slowed ? e.speed * 0.5 : e.speed;
     const ang = Math.atan2(State.player.y - e.y, State.player.x - e.x);
     e.vx = Math.cos(ang) * spd;
     e.vy = Math.sin(ang) * spd;
@@ -649,6 +766,9 @@ const ABILITY_LABEL_KEYS: Record<string, Parameters<typeof t>[0]> = {
   weapon_1: 'weaponBolt',
   weapon_2: 'weaponSpray',
   weapon_3: 'weaponWeb',
+  weapon_4: 'weaponFireTrail',
+  weapon_5: 'weaponPoisonTrail',
+  weapon_6: 'weaponIceTrail',
 };
 
 function getAbilityMaxLevel(state: GameState, id: string): number {
@@ -817,6 +937,40 @@ function generateUpgrades(): UpgradeOptions[] {
     if (State.unlockedWeapons.includes(weaponId)) {
       const upgrade = createWeaponUpgrade(State, weaponId, labelKey);
       if (upgrade) pool.push(upgrade);
+    }
+  }
+
+  const activeTrailWeapon = getTrailWeaponId(State);
+  if (activeTrailWeapon) {
+    const trailLabelKeys = {
+      4: 'weaponFireTrail',
+      5: 'weaponPoisonTrail',
+      6: 'weaponIceTrail',
+    } as const;
+    const upgrade = createWeaponUpgrade(State, activeTrailWeapon, trailLabelKeys[activeTrailWeapon]);
+    if (upgrade) pool.push(upgrade);
+  } else if (State.level >= 5) {
+    const trailUnlocks = [
+      [4, 'upgFireTrail'],
+      [5, 'upgPoisonTrail'],
+      [6, 'upgIceTrail'],
+    ] as const;
+    for (const [weaponId, labelKey] of trailUnlocks) {
+      if (!isUpgradeRemoved(State, `weapon_${weaponId}`)) {
+        pool.push({
+          id: `weapon_${weaponId}`,
+          kind: 'weapon',
+          level: 1,
+          maxLevel: getAbilityMaxLevel(State, `weapon_${weaponId}`),
+          label: t(labelKey),
+          apply: s => {
+            if (!s.unlockedWeapons.some(id => id >= 4 && id <= 6)) {
+              s.unlockedWeapons.push(weaponId);
+              s.weaponLevels[weaponId] = 1;
+            }
+          },
+        });
+      }
     }
   }
 

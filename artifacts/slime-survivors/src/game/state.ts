@@ -1,4 +1,4 @@
-import { Player, Enemy, Projectile, XPOrb, DamageText, Lake, AppleTree, Apple, Chest, ArtifactDef, Difficulty, MiniClone } from './entities';
+import { Player, Enemy, Projectile, XPOrb, DamageText, Lake, AppleTree, Apple, Chest, ArtifactDef, Difficulty, MiniClone, TrailSegment } from './entities';
 
 export type GameStatus = 'START' | 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER' | 'WIN' | 'PAUSED' | 'CHEST';
 
@@ -50,6 +50,7 @@ export class GameState {
   projectiles: Projectile[] = [];
   xpOrbs: XPOrb[] = [];
   damageTexts: DamageText[] = [];
+  trailSegments: TrailSegment[] = [];
   lakes: Lake[] = [];
   appleTrees: AppleTree[] = [];
   apples: Apple[] = [];
