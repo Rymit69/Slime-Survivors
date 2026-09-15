@@ -36,7 +36,7 @@ export function getTrailWidth(state: GameState, weaponId: TrailWeaponId): number
   const level = getTrailLevel(state, weaponId);
   // Keep the trail visibly behind the slime instead of turning it into a
   // full-width ribbon. The hero size still controls the footprint.
-  return state.player.size * (0.72 + (level - 1) * 0.08);
+  return state.player.size * (0.92 + (level - 1) * 0.10);
 }
 
 export function getTrailLifetime(state: GameState, weaponId: TrailWeaponId): number {

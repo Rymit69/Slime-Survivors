@@ -281,7 +281,41 @@ export function Game() {
     audio.loop = true;
     audio.volume = musicVol;
     audioRef.current = audio;
-    return () => { audio.pause(); audioRef.current = null; };
+
+    const pauseForAppLifecycle = () => {
+      audio.pause();
+    };
+    const resumeAfterAppLifecycle = () => {
+      if (!document.hidden && musicStarted.current && audio.paused) {
+        audio.play().catch(() => {
+          // A user gesture may be required after returning from the background.
+        });
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) pauseForAppLifecycle();
+      else resumeAfterAppLifecycle();
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', pauseForAppLifecycle);
+    window.addEventListener('beforeunload', pauseForAppLifecycle);
+    window.addEventListener('blur', pauseForAppLifecycle);
+    window.addEventListener('focus', resumeAfterAppLifecycle);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', pauseForAppLifecycle);
+      window.removeEventListener('beforeunload', pauseForAppLifecycle);
+      window.removeEventListener('blur', pauseForAppLifecycle);
+      window.removeEventListener('focus', resumeAfterAppLifecycle);
+      audio.pause();
+      audio.currentTime = 0;
+      audio.removeAttribute('src');
+      audio.load();
+      audioRef.current = null;
+      musicStarted.current = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -289,13 +323,21 @@ export function Game() {
   }, [musicVol]);
 
   const tryPlayMusic = () => {
-    if (!musicStarted.current && audioRef.current) {
+    if (audioRef.current && audioRef.current.paused) {
       audioRef.current.play().then(() => {
         musicStarted.current = true;
       }).catch(() => {
         // Autoplay blocked — will retry on next user gesture
       });
     }
+  };
+
+  const stopMusic = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+    musicStarted.current = false;
   };
 
   const changeLang = (l: Lang) => { setLang(l); setLangState(l); };
@@ -344,7 +386,7 @@ export function Game() {
     tryPlayMusic();
     setScreen('GAME');
   };
-  const onGoMenu    = () => { setPauseSettingsOpen(false); setScreen('MENU'); };
+  const onGoMenu    = () => { stopMusic(); setPauseSettingsOpen(false); setScreen('MENU'); };
 
   const onUpgrade = (upgrade: UpgradeOptions) => {
     upgrade.apply(State);
@@ -389,7 +431,7 @@ export function Game() {
     if (canvasRef.current) resumeGameLoop(canvasRef.current, handleStateChange);
   };
 
-  const onPlayAgain = () => { setScreen('MENU'); setTimeout(() => setScreen('DIFFICULTY'), 10); };
+  const onPlayAgain = () => { stopMusic(); setScreen('MENU'); setTimeout(() => setScreen('DIFFICULTY'), 10); };
   const showInfo = (title: string, description: string) => setInfo({ title, description });
 
   const onPause  = () => { stopGameLoop(); State.status = 'PAUSED'; setGameStatus('PAUSED'); };

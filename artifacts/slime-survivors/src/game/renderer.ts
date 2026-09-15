@@ -76,6 +76,20 @@ function drawSprite(
   ctx.restore();
 }
 
+function drawEffectStamp(
+  ctx: CanvasRenderingContext2D,
+  key: string,
+  cx: number,
+  cy: number,
+  size: number,
+  alpha: number,
+) {
+  const img = sp(key);
+  if (!img) return;
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(img, cx - size / 2, cy - size / 2, size, size);
+}
+
 function drawRotatedSprite(
   ctx: CanvasRenderingContext2D,
   key: string,
@@ -105,16 +119,16 @@ function renderTrail(ctx: CanvasRenderingContext2D, state: GameState) {
   if (!weaponId || state.trailSegments.length === 0) return;
   const palette = trailPalette(weaponId);
   const width = getTrailWidth(state, weaponId);
-  const points = state.trailSegments;
+  // Avoid spending a frame on stale trail points after a long movement burst.
+  const points = state.trailSegments.slice(-72);
 
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  // A narrow underlay makes the trail readable without producing the large
-  // translucent snake/ribbon seen in the reference screenshot.
-  ctx.globalAlpha = 0.32;
+  // Wider and denser than the previous version, but still a compact trail.
+  ctx.globalAlpha = 0.52;
   ctx.strokeStyle = palette.glow;
-  ctx.lineWidth = Math.max(2, width * 0.28);
+  ctx.lineWidth = Math.max(4, width * 0.42);
   ctx.beginPath();
   points.forEach((segment, index) => {
     if (index === 0) ctx.moveTo(segment.x, segment.y);
@@ -124,59 +138,44 @@ function renderTrail(ctx: CanvasRenderingContext2D, state: GameState) {
 
   for (let index = 0; index < points.length; index++) {
     const segment = points[index];
-    const alpha = Math.max(0.12, 1 - segment.age / segment.maxAge);
-    const stampRadius = Math.max(2.5, width * 0.22);
-    ctx.globalAlpha = alpha * 0.72;
+    const alpha = Math.max(0.24, 1 - segment.age / segment.maxAge);
+    const stampRadius = Math.max(3.5, width * 0.3);
+    ctx.globalAlpha = alpha * 0.88;
     ctx.fillStyle = palette.base;
     ctx.beginPath();
     ctx.arc(segment.x, segment.y, stampRadius, 0, Math.PI * 2);
     ctx.fill();
 
-    // Use the supplied pixel-art effect textures on the road itself. They are
-    // intentionally small and spaced so the trail reads as individual effects.
-    const effectSize = Math.max(10, Math.min(17, width * 0.95));
-    ctx.globalAlpha = alpha * 0.9;
-    drawSprite(ctx, palette.sprite, segment.x, segment.y, effectSize, effectSize);
+    // Static pixel-art stamps are cheaper than animated particles and remain
+    // visible on the road even on slower mobile devices.
+    const effectSize = Math.max(12, Math.min(19, width * 0.82));
+    drawEffectStamp(ctx, palette.sprite, segment.x, segment.y, effectSize, alpha);
   }
   ctx.restore();
 }
 
 function renderEnemyStatusFx(ctx: CanvasRenderingContext2D, enemy: GameState['enemies'][number]) {
-  const time = Date.now() / 180;
   if (enemy.burningTimer > 0) {
     ctx.save();
-    ctx.globalAlpha = 0.95;
-    ctx.shadowColor = '#ff482c';
-    ctx.shadowBlur = 5;
-    for (let i = 0; i < 4; i++) {
-      const phase = time * 1.15 + i * Math.PI / 2;
-      const radius = enemy.size * 0.72;
-      drawSprite(
-        ctx,
-        'effect_fire',
-        enemy.x + Math.cos(phase) * radius,
-        enemy.y - enemy.size * 0.7 + Math.sin(phase) * radius * 0.5,
-        17,
-        17,
-      );
+    const fireOffsets = [
+      [-0.7, -0.9],
+      [0, -1.25],
+      [0.7, -0.9],
+    ];
+    for (const [ox, oy] of fireOffsets) {
+      drawEffectStamp(ctx, 'effect_fire', enemy.x + ox * enemy.size, enemy.y + oy * enemy.size, 18, 0.95);
     }
     ctx.restore();
   }
   if (enemy.poisoned) {
     ctx.save();
-    ctx.globalAlpha = 0.9;
-    ctx.shadowColor = '#54e75e';
-    ctx.shadowBlur = 4;
-    for (let i = 0; i < 4; i++) {
-      const phase = time * 0.7 + i * Math.PI / 2;
-      drawSprite(
-        ctx,
-        'effect_poison',
-        enemy.x + Math.cos(phase) * (enemy.size * 0.85),
-        enemy.y - enemy.size * 0.4 + Math.sin(phase) * enemy.size * 0.5,
-        17,
-        17,
-      );
+    const poisonOffsets = [
+      [-0.85, -0.35],
+      [0, -1.0],
+      [0.85, -0.35],
+    ];
+    for (const [ox, oy] of poisonOffsets) {
+      drawEffectStamp(ctx, 'effect_poison', enemy.x + ox * enemy.size, enemy.y + oy * enemy.size, 18, 0.9);
     }
     ctx.restore();
   }
@@ -189,19 +188,13 @@ function renderEnemyStatusFx(ctx: CanvasRenderingContext2D, enemy: GameState['en
     ctx.arc(enemy.x, enemy.y, enemy.size + 7, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    ctx.shadowColor = '#4fc8ff';
-    ctx.shadowBlur = 6;
     const iceRadius = enemy.size * 0.95;
-    for (let i = 0; i < 6; i++) {
-      const phase = -time * 0.65 + i * Math.PI / 3;
-      drawSprite(
-        ctx,
-        'effect_ice',
-        enemy.x + Math.cos(phase) * iceRadius,
-        enemy.y + Math.sin(phase) * iceRadius,
-        18,
-        18,
-      );
+    const iceOffsets = [
+      [-1, 0], [-0.5, -0.9], [0.5, -0.9],
+      [1, 0], [0.5, 0.9], [-0.5, 0.9],
+    ];
+    for (const [ox, oy] of iceOffsets) {
+      drawEffectStamp(ctx, 'effect_ice', enemy.x + ox * iceRadius, enemy.y + oy * iceRadius, 18, 0.95);
     }
     ctx.restore();
   }
