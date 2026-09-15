@@ -126,9 +126,10 @@ function renderTrail(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   // Wider and denser than the previous version, but still a compact trail.
-  ctx.globalAlpha = 0.52;
+  ctx.globalAlpha = 0.68;
   ctx.strokeStyle = palette.glow;
-  ctx.lineWidth = Math.max(4, width * 0.42);
+  ctx.lineWidth = Math.max(5, width * 0.52);
+  ctx.filter = 'saturate(1.7) contrast(1.3)';
   ctx.beginPath();
   points.forEach((segment, index) => {
     if (index === 0) ctx.moveTo(segment.x, segment.y);
@@ -139,17 +140,10 @@ function renderTrail(ctx: CanvasRenderingContext2D, state: GameState) {
   for (let index = 0; index < points.length; index++) {
     const segment = points[index];
     const alpha = Math.max(0.24, 1 - segment.age / segment.maxAge);
-    const stampRadius = Math.max(3.5, width * 0.3);
-    ctx.globalAlpha = alpha * 0.88;
-    ctx.fillStyle = palette.base;
-    ctx.beginPath();
-    ctx.arc(segment.x, segment.y, stampRadius, 0, Math.PI * 2);
-    ctx.fill();
-
     // Static pixel-art stamps are cheaper than animated particles and remain
     // visible on the road even on slower mobile devices.
-    const effectSize = Math.max(12, Math.min(19, width * 0.82));
-    drawEffectStamp(ctx, palette.sprite, segment.x, segment.y, effectSize, alpha);
+    const effectSize = Math.max(14, Math.min(21, width * 0.9));
+    drawEffectStamp(ctx, palette.sprite, segment.x, segment.y, effectSize, Math.min(1, alpha * 1.15));
   }
   ctx.restore();
 }
@@ -181,13 +175,7 @@ function renderEnemyStatusFx(ctx: CanvasRenderingContext2D, enemy: GameState['en
   }
   if (enemy.frozenTimer > 0 || enemy.chilledTimer > 0) {
     ctx.save();
-    ctx.strokeStyle = enemy.frozenTimer > 0 ? '#b9f2ff' : '#5bbcff';
-    ctx.fillStyle = enemy.frozenTimer > 0 ? 'rgba(170,235,255,0.22)' : 'rgba(80,170,255,0.12)';
-    ctx.lineWidth = enemy.frozenTimer > 0 ? 3 : 2;
-    ctx.beginPath();
-    ctx.arc(enemy.x, enemy.y, enemy.size + 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    ctx.filter = 'saturate(1.8) contrast(1.35)';
     const iceRadius = enemy.size * 0.95;
     const iceOffsets = [
       [-1, 0], [-0.5, -0.9], [0.5, -0.9],

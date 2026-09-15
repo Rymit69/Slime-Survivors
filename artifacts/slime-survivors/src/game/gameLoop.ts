@@ -497,8 +497,11 @@ function update(
     updateEnemyEffects(e, dt);
     const webSlowed = !e.isFinalBoss && hasWeb &&
       Math.hypot(State.player.x - e.x, State.player.y - e.y) <= webRadius;
-    const frozen = !e.isFinalBoss && e.frozenTimer > 0;
-    const chilled = !e.isFinalBoss && e.chilledTimer > 0;
+    // Only the ice trail is allowed to affect movement speed. Keep this
+    // explicitly tied to the active weapon so fire/poison can never inherit
+    // a stale frozen/chilled flag.
+    const frozen = activeTrailWeapon === 6 && !e.isFinalBoss && e.frozenTimer > 0;
+    const chilled = activeTrailWeapon === 6 && !e.isFinalBoss && e.chilledTimer > 0;
     e.slowed = webSlowed || chilled || frozen;
     const spd = frozen ? 0 : e.slowed ? e.speed * 0.5 : e.speed;
     const ang = Math.atan2(State.player.y - e.y, State.player.x - e.x);
