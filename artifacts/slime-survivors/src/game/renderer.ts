@@ -1,5 +1,5 @@
 import { GameState } from './state';
-import { Lake } from './entities';
+import { DesertBiome, Lake } from './entities';
 import { t } from './lang';
 import { sp } from './sprites';
 import { TILE_SIZE } from './world';
@@ -236,8 +236,14 @@ function renderChestNavigation(ctx: CanvasRenderingContext2D, state: GameState) 
 //   rotate(PI)     → grass at E   → right edge
 //   rotate(PI/2)   → grass at N   → top edge   (left→top after CW)
 //   rotate(-PI/2)  → grass at S   → bottom edge (left→bottom after CCW)
-function renderLake(ctx: CanvasRenderingContext2D, lake: Lake) {
+function renderLake(ctx: CanvasRenderingContext2D, lake: Lake, deserts: DesertBiome[]) {
   const W = lake.widthTiles, H = lake.heightTiles;
+  const desertAt = (x: number, y: number) => deserts.some(desert =>
+    x >= desert.x &&
+    x <= desert.x + desert.widthTiles * TILE_SIZE &&
+    y >= desert.y &&
+    y <= desert.y + desert.heightTiles * TILE_SIZE
+  );
   for (let gy = 0; gy < H; gy++) {
     for (let gx = 0; gx < W; gx++) {
       const px = lake.x + gx * TILE_SIZE;
@@ -245,15 +251,58 @@ function renderLake(ctx: CanvasRenderingContext2D, lake: Lake) {
       const top = gy === 0, bottom = gy === H - 1;
       const left = gx === 0, right = gx === W - 1;
 
-      if      (top    && left)  drawTile(ctx, 'water_corner', px, py,  0,            false, false); // NW
-      else if (top    && right) drawTile(ctx, 'water_corner', px, py,  Math.PI / 2,  false, false); // NE
-      else if (bottom && left)  drawTile(ctx, 'water_corner', px, py, -Math.PI / 2,  false, false); // SW
-      else if (bottom && right) drawTile(ctx, 'water_corner', px, py,  Math.PI,      false, false); // SE
-      else if (left)   drawTile(ctx, 'water_side', px, py,  0,             false, false); // W
-      else if (right)  drawTile(ctx, 'water_side', px, py,  Math.PI,       false, false); // E
-      else if (top)    drawTile(ctx, 'water_side', px, py,  Math.PI / 2,   false, false); // N
-      else if (bottom) drawTile(ctx, 'water_side', px, py, -Math.PI / 2,   false, false); // S
+      if (top && left) {
+        const key = desertAt(px - TILE_SIZE / 2, py - TILE_SIZE / 2) ? 'water_desert_corner' : 'water_corner';
+        drawTile(ctx, key, px, py, 0);
+      } else if (top && right) {
+        const key = desertAt(px + TILE_SIZE * 1.5, py - TILE_SIZE / 2) ? 'water_desert_corner' : 'water_corner';
+        drawTile(ctx, key, px, py, Math.PI / 2);
+      } else if (bottom && left) {
+        const key = desertAt(px - TILE_SIZE / 2, py + TILE_SIZE * 1.5) ? 'water_desert_corner' : 'water_corner';
+        drawTile(ctx, key, px, py, -Math.PI / 2);
+      } else if (bottom && right) {
+        const key = desertAt(px + TILE_SIZE * 1.5, py + TILE_SIZE * 1.5) ? 'water_desert_corner' : 'water_corner';
+        drawTile(ctx, key, px, py, Math.PI);
+      } else if (left) {
+        const key = desertAt(px - TILE_SIZE / 2, py + TILE_SIZE / 2) ? 'water_desert_side' : 'water_side';
+        drawTile(ctx, key, px, py);
+      } else if (right) {
+        const key = desertAt(px + TILE_SIZE * 1.5, py + TILE_SIZE / 2) ? 'water_desert_side' : 'water_side';
+        drawTile(ctx, key, px, py, Math.PI);
+      } else if (top) {
+        const key = desertAt(px + TILE_SIZE / 2, py - TILE_SIZE / 2) ? 'water_desert_side' : 'water_side';
+        drawTile(ctx, key, px, py, Math.PI / 2);
+      } else if (bottom) {
+        const key = desertAt(px + TILE_SIZE / 2, py + TILE_SIZE * 1.5) ? 'water_desert_side' : 'water_side';
+        drawTile(ctx, key, px, py, -Math.PI / 2);
+      }
       else             drawTile(ctx, 'water', px, py);
+    }
+  }
+}
+
+function renderDesert(ctx: CanvasRenderingContext2D, desert: DesertBiome) {
+  for (let row = 0; row < desert.heightTiles; row++) {
+    for (let col = 0; col < desert.widthTiles; col++) {
+      const x = desert.x + col * TILE_SIZE;
+      const y = desert.y + row * TILE_SIZE;
+      const left = col === 0;
+      const right = col === desert.widthTiles - 1;
+      const top = row === 0;
+      const bottom = row === desert.heightTiles - 1;
+
+      if (top && left) drawTile(ctx, 'desert_grass_corner', x, y, Math.PI);
+      else if (top && right) drawTile(ctx, 'desert_grass_corner', x, y, -Math.PI / 2);
+      else if (bottom && right) drawTile(ctx, 'desert_grass_corner', x, y, 0);
+      else if (bottom && left) drawTile(ctx, 'desert_grass_corner', x, y, Math.PI / 2);
+      // The supplied vertical tile has sand on its left and grass on its
+      // right; reflect it on the desert's western edge.
+      else if (left) drawTile(ctx, 'desert_grass_vertical', x, y, 0, true);
+      else if (right) drawTile(ctx, 'desert_grass_vertical', x, y);
+      // The supplied horizontal tile has sand above grass.
+      else if (top) drawTile(ctx, 'desert_grass_horizontal', x, y, Math.PI);
+      else if (bottom) drawTile(ctx, 'desert_grass_horizontal', x, y);
+      else drawTile(ctx, 'desert', x, y);
     }
   }
 }
@@ -321,7 +370,18 @@ export function render(
     }
   }
 
-  // ── 2. Lakes ────────────────────────────────────────────────────────────────
+  // ── 2. Rare desert patches ──────────────────────────────────────────────────
+  for (const desert of state.deserts) {
+    if (
+      desert.x + desert.widthTiles * S < state.camera.x - halfW - objectCullPadding ||
+      desert.x > state.camera.x + halfW + objectCullPadding ||
+      desert.y + desert.heightTiles * S < state.camera.y - halfH - objectCullPadding ||
+      desert.y > state.camera.y + halfH + objectCullPadding
+    ) continue;
+    renderDesert(ctx, desert);
+  }
+
+  // ── 3. Lakes ────────────────────────────────────────────────────────────────
   for (const lake of state.lakes) {
     if (
       lake.x + lake.widthTiles * S  < state.camera.x - halfW - objectCullPadding ||
@@ -329,15 +389,15 @@ export function render(
       lake.y + lake.heightTiles * S < state.camera.y - halfH - objectCullPadding ||
       lake.y                        > state.camera.y + halfH + objectCullPadding
     ) continue;
-    renderLake(ctx, lake);
+    renderLake(ctx, lake, state.deserts);
   }
 
-  // ── 3. Apple trees ──────────────────────────────────────────────────────────
+  // ── 4. Apple trees and desert cacti ─────────────────────────────────────────
   for (const tree of state.appleTrees) {
     const inView = Math.abs(tree.x - state.camera.x) < halfW + objectCullPadding &&
                    Math.abs(tree.y - state.camera.y) < halfH + objectCullPadding;
     if (!inView) continue;
-    drawSprite(ctx, 'apple_tree', tree.x, tree.y - 20, 80, 80);
+    drawSprite(ctx, tree.kind === 'cactus' ? 'cactus_pitaya' : 'apple_tree', tree.x, tree.y - 20, 80, 80);
     if (!tree.hasApple && tree.appleTimer > 0) {
       const pct = tree.appleTimer / 60;
       ctx.save();
@@ -351,12 +411,12 @@ export function render(
     }
   }
 
-  // ── 3b. Elemental trail ─────────────────────────────────────────────────────
+  // ── 4b. Elemental trail ─────────────────────────────────────────────────────
   renderTrail(ctx, state);
 
-  // ── 4. Apples on ground ─────────────────────────────────────────────────────
+  // ── 5. Fruit on ground ──────────────────────────────────────────────────────
   for (const apple of state.apples) {
-    drawSprite(ctx, 'apple', apple.x, apple.y + Math.sin(Date.now() / 500) * 3, 22, 22);
+    drawSprite(ctx, apple.kind === 'pitaya' ? 'pitaya' : 'apple', apple.x, apple.y + Math.sin(Date.now() / 500) * 3, 22, 22);
   }
 
   // ── 5. Sticky Web aura ──────────────────────────────────────────────────────

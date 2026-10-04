@@ -92,13 +92,23 @@ export interface Lake {
   seed: number;
 }
 
+export interface DesertBiome {
+  id: string;
+  x: number;
+  y: number;
+  widthTiles: number;
+  heightTiles: number;
+}
+
 export interface AppleTree extends Entity {
   appleTimer: number;
   hasApple: boolean;
+  kind: 'apple' | 'cactus';
 }
 
 export interface Apple extends Entity {
   treeId: string;
+  kind: 'apple' | 'pitaya';
 }
 
 export interface Chest extends Entity {

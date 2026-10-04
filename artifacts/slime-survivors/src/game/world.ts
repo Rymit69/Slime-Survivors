@@ -1,6 +1,20 @@
-import { Lake, AppleTree } from './entities';
+import { Lake, DesertBiome, AppleTree } from './entities';
 
 export const TILE_SIZE = 32;
+
+function rectanglesOverlap(
+  a: { x: number; y: number; widthTiles: number; heightTiles: number },
+  b: { x: number; y: number; widthTiles: number; heightTiles: number },
+  gapTiles = 0,
+) {
+  const gap = gapTiles * TILE_SIZE;
+  return !(
+    a.x + a.widthTiles * TILE_SIZE + gap <= b.x ||
+    b.x + b.widthTiles * TILE_SIZE + gap <= a.x ||
+    a.y + a.heightTiles * TILE_SIZE + gap <= b.y ||
+    b.y + b.heightTiles * TILE_SIZE + gap <= a.y
+  );
+}
 
 /** Returns true if two lakes overlap or are closer than minGap pixels apart. */
 function lakesTooClose(a: Lake, b: Lake, minGap = TILE_SIZE * 3): boolean {
@@ -24,8 +38,8 @@ export function generateLakes(count: number): Lake[] {
     const cy = (Math.random() - 0.5) * 5000;
     const candidate: Lake = {
       id: String(lakes.length),
-      x: cx - (widthTiles  * TILE_SIZE) / 2,
-      y: cy - (heightTiles * TILE_SIZE) / 2,
+      x: Math.round((cx - (widthTiles * TILE_SIZE) / 2) / TILE_SIZE) * TILE_SIZE,
+      y: Math.round((cy - (heightTiles * TILE_SIZE) / 2) / TILE_SIZE) * TILE_SIZE,
       widthTiles,
       heightTiles,
       seed: Math.random() * 1000,
@@ -49,8 +63,74 @@ export function isInsideLake(px: number, py: number, lake: Lake): boolean {
   );
 }
 
-/** Place 3-5 apple trees scattered on the map, avoiding lake tiles. */
-export function generateAppleTrees(count: number, lakes: Lake[]): AppleTree[] {
+/** True when a world-space point belongs to any generated desert patch. */
+export function isInsideDesert(px: number, py: number, desert: DesertBiome): boolean {
+  return px >= desert.x &&
+    px <= desert.x + desert.widthTiles * TILE_SIZE &&
+    py >= desert.y &&
+    py <= desert.y + desert.heightTiles * TILE_SIZE;
+}
+
+/**
+ * Generate a few rare desert patches beside lakes so the authored water/sand
+ * transition tiles are used naturally. Patches stay away from the spawn point.
+ */
+export function generateDesertBiomes(lakes: Lake[], count = 2): DesertBiome[] {
+  const deserts: DesertBiome[] = [];
+  const usedLakeIds = new Set<string>();
+  let attempts = 0;
+
+  while (deserts.length < count && attempts < count * 60) {
+    attempts++;
+    const lake = lakes[Math.floor(Math.random() * lakes.length)];
+    if (!lake || usedLakeIds.has(lake.id)) continue;
+
+    const widthTiles = 12 + Math.floor(Math.random() * 7);
+    const heightTiles = 12 + Math.floor(Math.random() * 7);
+    const side = Math.floor(Math.random() * 4);
+    let x: number;
+    let y: number;
+
+    if (side === 0 || side === 1) {
+      x = side === 0
+        ? lake.x - widthTiles * TILE_SIZE
+        : lake.x + lake.widthTiles * TILE_SIZE;
+      y = lake.y + (lake.heightTiles * TILE_SIZE - heightTiles * TILE_SIZE) / 2;
+    } else {
+      y = side === 2
+        ? lake.y - heightTiles * TILE_SIZE
+        : lake.y + lake.heightTiles * TILE_SIZE;
+      x = lake.x + (lake.widthTiles * TILE_SIZE - widthTiles * TILE_SIZE) / 2;
+    }
+
+    // Align sand tiles to the same world grid as the lake and terrain.
+    x = Math.round(x / TILE_SIZE) * TILE_SIZE;
+    y = Math.round(y / TILE_SIZE) * TILE_SIZE;
+    const candidate: DesertBiome = {
+      id: `desert_${deserts.length}`,
+      x,
+      y,
+      widthTiles,
+      heightTiles,
+    };
+    const centerX = x + widthTiles * TILE_SIZE / 2;
+    const centerY = y + heightTiles * TILE_SIZE / 2;
+    if (Math.hypot(centerX, centerY) < 800) continue;
+
+    const overlapsOtherLake = lakes.some(other =>
+      other.id !== lake.id && rectanglesOverlap(candidate, other, 1)
+    );
+    if (overlapsOtherLake || deserts.some(other => rectanglesOverlap(candidate, other, 3))) continue;
+
+    deserts.push(candidate);
+    usedLakeIds.add(lake.id);
+  }
+
+  return deserts;
+}
+
+/** Place normal trees on plains and cacti in desert patches; avoid lake tiles. */
+export function generateAppleTrees(count: number, lakes: Lake[], deserts: DesertBiome[]): AppleTree[] {
   const trees: AppleTree[] = [];
   let attempts = 0;
   while (trees.length < count && attempts < 200) {
@@ -60,8 +140,25 @@ export function generateAppleTrees(count: number, lakes: Lake[]): AppleTree[] {
     // Keep away from origin so player doesn't start inside a tree
     if (Math.hypot(x, y) < 200) continue;
     const inLake = lakes.some(l => isInsideLake(x, y, l));
-    if (!inLake) {
-      trees.push({ id: String(trees.length), x, y, appleTimer: 0, hasApple: false });
+    const inDesert = deserts.some(d => isInsideDesert(x, y, d));
+    if (!inLake && !inDesert) {
+      trees.push({ id: String(trees.length), x, y, appleTimer: 0, hasApple: false, kind: 'apple' });
+    }
+  }
+
+  for (const desert of deserts) {
+    const cactusCount = 2 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < cactusCount; i++) {
+      const x = desert.x + (2 + Math.random() * Math.max(1, desert.widthTiles - 4)) * TILE_SIZE;
+      const y = desert.y + (2 + Math.random() * Math.max(1, desert.heightTiles - 4)) * TILE_SIZE;
+      trees.push({
+        id: `cactus_${desert.id}_${i}`,
+        x,
+        y,
+        appleTimer: 0,
+        hasApple: false,
+        kind: 'cactus',
+      });
     }
   }
   return trees;

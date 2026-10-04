@@ -1,8 +1,8 @@
 import { AbilityTarget, GameState, State, UpgradeOptions } from './state';
-import { OrbColor, Enemy, EnemyType, Difficulty, HeroType, MiniClone, TrailWeaponId } from './entities';
+import { OrbColor, Enemy, EnemyType, Difficulty, HeroType, MiniClone, TrailSegment, TrailWeaponId } from './entities';
 import { Input } from './input';
 import { render } from './renderer';
-import { generateLakes, isInsideLake, generateAppleTrees, TILE_SIZE } from './world';
+import { generateLakes, generateDesertBiomes, isInsideLake, generateAppleTrees, TILE_SIZE } from './world';
 import { createWeapons } from './weapons';
 import { t } from './lang';
 import { ALL_ARTIFACTS } from './artifacts';
@@ -122,7 +122,12 @@ export function startGameLoop(
   State.currentChestKind = 'normal';
 
   State.lakes = generateLakes(20);
-  State.appleTrees = generateAppleTrees(3 + Math.floor(Math.random() * 3), State.lakes);
+  State.deserts = generateDesertBiomes(State.lakes);
+  State.appleTrees = generateAppleTrees(
+    3 + Math.floor(Math.random() * 3),
+    State.lakes,
+    State.deserts,
+  );
 
   Object.values(weapons).forEach(w => { w.currentCooldown = 0; });
   lastTime = performance.now();
@@ -160,21 +165,56 @@ function makeLoop(
   return loop;
 }
 
-function trailSegmentTouchesEnemy(
-  segment: { x: number; y: number },
-  enemy: { x: number; y: number; size: number },
-  width: number,
-) {
-  return Math.hypot(segment.x - enemy.x, segment.y - enemy.y) <= width / 2 + enemy.size;
+const TRAIL_INDEX_CELL_SIZE = TILE_SIZE * 2;
+
+function buildTrailIndex(trailWeaponId: TrailWeaponId): Map<string, TrailSegment[]> {
+  const index = new Map<string, TrailSegment[]>();
+  for (const segment of State.trailSegments) {
+    if (segment.weaponId !== trailWeaponId) continue;
+    const cellX = Math.floor(segment.x / TRAIL_INDEX_CELL_SIZE);
+    const cellY = Math.floor(segment.y / TRAIL_INDEX_CELL_SIZE);
+    const key = `${cellX},${cellY}`;
+    const cell = index.get(key);
+    if (cell) cell.push(segment);
+    else index.set(key, [segment]);
+  }
+  return index;
 }
 
-function applyTrailEffect(enemy: Enemy, trailWeaponId: TrailWeaponId) {
+function trailIndexTouchesEnemy(
+  index: Map<string, TrailSegment[]>,
+  enemy: Enemy,
+  width: number,
+) {
+  const radius = width / 2 + enemy.size;
+  const radiusSquared = radius * radius;
+  const minX = Math.floor((enemy.x - radius) / TRAIL_INDEX_CELL_SIZE);
+  const maxX = Math.floor((enemy.x + radius) / TRAIL_INDEX_CELL_SIZE);
+  const minY = Math.floor((enemy.y - radius) / TRAIL_INDEX_CELL_SIZE);
+  const maxY = Math.floor((enemy.y + radius) / TRAIL_INDEX_CELL_SIZE);
+
+  for (let cellX = minX; cellX <= maxX; cellX++) {
+    for (let cellY = minY; cellY <= maxY; cellY++) {
+      const cell = index.get(`${cellX},${cellY}`);
+      if (!cell) continue;
+      for (const segment of cell) {
+        const dx = segment.x - enemy.x;
+        const dy = segment.y - enemy.y;
+        if (dx * dx + dy * dy <= radiusSquared) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function applyTrailEffect(
+  enemy: Enemy,
+  trailWeaponId: TrailWeaponId,
+  trailIndex: Map<string, TrailSegment[]>,
+  trailWidth: number,
+) {
   if (enemy.isFinalBoss) return;
-  const width = getTrailWidth(State, trailWeaponId);
-  const touched = State.trailSegments.some(segment =>
-    segment.weaponId === trailWeaponId && trailSegmentTouchesEnemy(segment, enemy, width)
-  );
-  if (!touched) return;
+  if (!trailIndexTouchesEnemy(trailIndex, enemy, trailWidth)) return;
 
   const effect = getTrailEffectStats(State, trailWeaponId);
   if (trailWeaponId === 4) {
@@ -491,9 +531,11 @@ function update(
   // ── 3. Update enemies ───────────────────────────────────────────────────────
   const hasWeb = State.unlockedWeapons.includes(3);
   const webRadius = getStickyWebRadius(State);
+  const trailWidth = activeTrailWeapon ? getTrailWidth(State, activeTrailWeapon) : 0;
+  const trailIndex = activeTrailWeapon ? buildTrailIndex(activeTrailWeapon) : new Map<string, TrailSegment[]>();
   for (let i = State.enemies.length - 1; i >= 0; i--) {
     const e = State.enemies[i];
-    if (activeTrailWeapon) applyTrailEffect(e, activeTrailWeapon);
+    if (activeTrailWeapon) applyTrailEffect(e, activeTrailWeapon, trailIndex, trailWidth);
     updateEnemyEffects(e, dt);
     const webSlowed = !e.isFinalBoss && hasWeb &&
       Math.hypot(State.player.x - e.x, State.player.y - e.y) <= webRadius;
@@ -698,15 +740,30 @@ function update(
       if (tree.appleTimer >= 60) {
         tree.appleTimer = 0;
         tree.hasApple = true;
-        State.apples.push({ id: Math.random().toString(), x: tree.x, y: tree.y + 28, treeId: tree.id });
+        State.apples.push({
+          id: Math.random().toString(),
+          x: tree.x,
+          y: tree.y + 28,
+          treeId: tree.id,
+          kind: tree.kind === 'cactus' ? 'pitaya' : 'apple',
+        });
       }
     }
   }
   for (let i = State.apples.length - 1; i >= 0; i--) {
     const apple = State.apples[i];
     if (Math.hypot(State.player.x - apple.x, State.player.y - apple.y) < 28) {
-      State.player.currentHP = Math.min(State.player.maxHP, State.player.currentHP + 50);
-      State.damageTexts.push({ id: Math.random().toString(), x: apple.x, y: apple.y - 20, text: '+50', lifeTime: 1.2, maxLifeTime: 1.2, color: '#00ff88' });
+      const healing = apple.kind === 'pitaya' ? 75 : 50;
+      State.player.currentHP = Math.min(State.player.maxHP, State.player.currentHP + healing);
+      State.damageTexts.push({
+        id: Math.random().toString(),
+        x: apple.x,
+        y: apple.y - 20,
+        text: `+${healing}`,
+        lifeTime: 1.2,
+        maxLifeTime: 1.2,
+        color: apple.kind === 'pitaya' ? '#ff67b2' : '#00ff88',
+      });
       const tree = State.appleTrees.find(t => t.id === apple.treeId);
       if (tree) tree.hasApple = false;
       State.apples.splice(i, 1);
