@@ -2,7 +2,7 @@ import { GameState } from './state';
 import { DesertBiome, Lake } from './entities';
 import { t } from './lang';
 import { sp } from './sprites';
-import { TILE_SIZE } from './world';
+import { getDesertRowSpan, isInsideDesert, TILE_SIZE } from './world';
 import { heroColor } from './gameLoop';
 import { getStickyWebRadius, getTrailWeaponId, getTrailWidth } from './upgradeMath';
 
@@ -25,10 +25,12 @@ function drawTile(
   if (flipV) ctx.scale(1, -1);
   if (rotRad) ctx.rotate(rotRad);
   if (img) {
-    ctx.drawImage(img, -S / 2, -S / 2, S, S);
+    const needsBleed = key === 'desert' || key.startsWith('desert_grass_') || key.startsWith('water_desert_');
+    const bleed = needsBleed ? 1.5 : 0;
+    ctx.drawImage(img, -S / 2 - bleed / 2, -S / 2 - bleed / 2, S + bleed, S + bleed);
   } else {
     ctx.fillStyle = '#1a90aa';
-    ctx.fillRect(-S / 2, -S / 2, S, S);
+    ctx.fillRect(-S / 2 - 0.75, -S / 2 - 0.75, S + 1.5, S + 1.5);
   }
   ctx.restore();
 }
@@ -238,12 +240,7 @@ function renderChestNavigation(ctx: CanvasRenderingContext2D, state: GameState) 
 //   rotate(-PI/2)  → grass at S   → bottom edge (left→bottom after CCW)
 function renderLake(ctx: CanvasRenderingContext2D, lake: Lake, deserts: DesertBiome[]) {
   const W = lake.widthTiles, H = lake.heightTiles;
-  const desertAt = (x: number, y: number) => deserts.some(desert =>
-    x >= desert.x &&
-    x <= desert.x + desert.widthTiles * TILE_SIZE &&
-    y >= desert.y &&
-    y <= desert.y + desert.heightTiles * TILE_SIZE
-  );
+  const desertAt = (x: number, y: number) => deserts.some(desert => isInsideDesert(x, y, desert));
   for (let gy = 0; gy < H; gy++) {
     for (let gx = 0; gx < W; gx++) {
       const px = lake.x + gx * TILE_SIZE;
@@ -281,20 +278,43 @@ function renderLake(ctx: CanvasRenderingContext2D, lake: Lake, deserts: DesertBi
   }
 }
 
-function renderDesert(ctx: CanvasRenderingContext2D, desert: DesertBiome) {
-  for (let row = 0; row < desert.heightTiles; row++) {
-    for (let col = 0; col < desert.widthTiles; col++) {
+function renderDesert(
+  ctx: CanvasRenderingContext2D,
+  desert: DesertBiome,
+  viewLeft: number,
+  viewTop: number,
+  viewRight: number,
+  viewBottom: number,
+) {
+  const firstRow = Math.max(0, Math.floor((viewTop - desert.y) / TILE_SIZE));
+  const lastRow = Math.min(desert.heightTiles - 1, Math.floor((viewBottom - desert.y) / TILE_SIZE));
+  const firstCol = Math.max(0, Math.floor((viewLeft - desert.x) / TILE_SIZE));
+  const lastCol = Math.min(desert.widthTiles - 1, Math.floor((viewRight - desert.x) / TILE_SIZE));
+
+  for (let row = firstRow; row <= lastRow; row++) {
+    const span = getDesertRowSpan(desert, row);
+    if (!span) continue;
+    const startCol = Math.max(firstCol, span.startCol);
+    const endCol = Math.min(lastCol, span.endCol);
+    if (startCol > endCol) continue;
+
+    for (let col = startCol; col <= endCol; col++) {
       const x = desert.x + col * TILE_SIZE;
       const y = desert.y + row * TILE_SIZE;
-      const left = col === 0;
-      const right = col === desert.widthTiles - 1;
+      const left = col === span.startCol;
+      const right = col === span.endCol;
       const top = row === 0;
       const bottom = row === desert.heightTiles - 1;
+      const bevel = desert.cornerCutTiles;
+      const upperLeftBevel = left && row < bevel;
+      const upperRightBevel = right && row < bevel;
+      const lowerRightBevel = right && desert.heightTiles - 1 - row < bevel;
+      const lowerLeftBevel = left && desert.heightTiles - 1 - row < bevel;
 
-      if (top && left) drawTile(ctx, 'desert_grass_corner', x, y, Math.PI);
-      else if (top && right) drawTile(ctx, 'desert_grass_corner', x, y, -Math.PI / 2);
-      else if (bottom && right) drawTile(ctx, 'desert_grass_corner', x, y, 0);
-      else if (bottom && left) drawTile(ctx, 'desert_grass_corner', x, y, Math.PI / 2);
+      if (upperLeftBevel) drawTile(ctx, 'desert_grass_outer_corner', x, y);
+      else if (upperRightBevel) drawTile(ctx, 'desert_grass_outer_corner', x, y, Math.PI / 2);
+      else if (lowerRightBevel) drawTile(ctx, 'desert_grass_outer_corner', x, y, Math.PI);
+      else if (lowerLeftBevel) drawTile(ctx, 'desert_grass_outer_corner', x, y, -Math.PI / 2);
       // The supplied vertical tile has sand on its left and grass on its
       // right; reflect it on the desert's western edge.
       else if (left) drawTile(ctx, 'desert_grass_vertical', x, y, 0, true);
@@ -378,7 +398,14 @@ export function render(
       desert.y + desert.heightTiles * S < state.camera.y - halfH - objectCullPadding ||
       desert.y > state.camera.y + halfH + objectCullPadding
     ) continue;
-    renderDesert(ctx, desert);
+    renderDesert(
+      ctx,
+      desert,
+      state.camera.x - halfW - S,
+      state.camera.y - halfH - S,
+      state.camera.x + halfW + S,
+      state.camera.y + halfH + S,
+    );
   }
 
   // ── 3. Lakes ────────────────────────────────────────────────────────────────

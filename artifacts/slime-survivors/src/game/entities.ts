@@ -98,6 +98,7 @@ export interface DesertBiome {
   y: number;
   widthTiles: number;
   heightTiles: number;
+  cornerCutTiles: number;
 }
 
 export interface AppleTree extends Entity {

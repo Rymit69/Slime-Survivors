@@ -63,17 +63,32 @@ export function isInsideLake(px: number, py: number, lake: Lake): boolean {
   );
 }
 
-/** True when a world-space point belongs to any generated desert patch. */
+/** Tile span for one row of the chamfered desert shape. */
+export function getDesertRowSpan(desert: DesertBiome, row: number) {
+  if (row < 0 || row >= desert.heightTiles) return null;
+  const fromTop = Math.max(0, desert.cornerCutTiles - row);
+  const fromBottom = Math.max(0, desert.cornerCutTiles - (desert.heightTiles - 1 - row));
+  const inset = Math.max(fromTop, fromBottom);
+  return { startCol: inset, endCol: desert.widthTiles - 1 - inset };
+}
+
+/** True when a world-space point belongs to the chamfered desert shape. */
 export function isInsideDesert(px: number, py: number, desert: DesertBiome): boolean {
-  return px >= desert.x &&
-    px <= desert.x + desert.widthTiles * TILE_SIZE &&
-    py >= desert.y &&
-    py <= desert.y + desert.heightTiles * TILE_SIZE;
+  if (
+    px < desert.x ||
+    px >= desert.x + desert.widthTiles * TILE_SIZE ||
+    py < desert.y ||
+    py >= desert.y + desert.heightTiles * TILE_SIZE
+  ) return false;
+  const col = Math.floor((px - desert.x) / TILE_SIZE);
+  const row = Math.floor((py - desert.y) / TILE_SIZE);
+  const span = getDesertRowSpan(desert, row);
+  return span !== null && col >= span.startCol && col <= span.endCol;
 }
 
 /**
- * Generate a few rare desert patches beside lakes so the authored water/sand
- * transition tiles are used naturally. Patches stay away from the spawn point.
+ * Generate rare, large desert patches around lakes so each biome includes a
+ * lake and uses the authored water/sand transition tiles on its shoreline.
  */
 export function generateDesertBiomes(lakes: Lake[], count = 2): DesertBiome[] {
   const deserts: DesertBiome[] = [];
@@ -85,42 +100,35 @@ export function generateDesertBiomes(lakes: Lake[], count = 2): DesertBiome[] {
     const lake = lakes[Math.floor(Math.random() * lakes.length)];
     if (!lake || usedLakeIds.has(lake.id)) continue;
 
-    const widthTiles = 12 + Math.floor(Math.random() * 7);
-    const heightTiles = 12 + Math.floor(Math.random() * 7);
-    const side = Math.floor(Math.random() * 4);
-    let x: number;
-    let y: number;
-
-    if (side === 0 || side === 1) {
-      x = side === 0
-        ? lake.x - widthTiles * TILE_SIZE
-        : lake.x + lake.widthTiles * TILE_SIZE;
-      y = lake.y + (lake.heightTiles * TILE_SIZE - heightTiles * TILE_SIZE) / 2;
-    } else {
-      y = side === 2
-        ? lake.y - heightTiles * TILE_SIZE
-        : lake.y + lake.heightTiles * TILE_SIZE;
-      x = lake.x + (lake.widthTiles * TILE_SIZE - widthTiles * TILE_SIZE) / 2;
-    }
-
-    // Align sand tiles to the same world grid as the lake and terrain.
-    x = Math.round(x / TILE_SIZE) * TILE_SIZE;
-    y = Math.round(y / TILE_SIZE) * TILE_SIZE;
+    const widthTiles = 36 + Math.floor(Math.random() * 9);
+    const heightTiles = 24 + Math.floor(Math.random() * 7);
+    const cornerCutTiles = 5 + Math.floor(Math.random() * 3);
+    const lakeCenterX = lake.x + lake.widthTiles * TILE_SIZE / 2;
+    const lakeCenterY = lake.y + lake.heightTiles * TILE_SIZE / 2;
+    // Center the lake inside a distinctly wider-than-tall desert patch.
+    const x = Math.round((lakeCenterX - widthTiles * TILE_SIZE / 2) / TILE_SIZE) * TILE_SIZE;
+    const y = Math.round((lakeCenterY - heightTiles * TILE_SIZE / 2) / TILE_SIZE) * TILE_SIZE;
     const candidate: DesertBiome = {
       id: `desert_${deserts.length}`,
       x,
       y,
       widthTiles,
       heightTiles,
+      cornerCutTiles,
     };
     const centerX = x + widthTiles * TILE_SIZE / 2;
     const centerY = y + heightTiles * TILE_SIZE / 2;
     if (Math.hypot(centerX, centerY) < 800) continue;
 
-    const overlapsOtherLake = lakes.some(other =>
-      other.id !== lake.id && rectanglesOverlap(candidate, other, 1)
-    );
-    if (overlapsOtherLake || deserts.some(other => rectanglesOverlap(candidate, other, 3))) continue;
+    const hasCrossingLake = lakes.some(other => {
+      if (other.id === lake.id || !rectanglesOverlap(candidate, other)) return false;
+      const fullyInside = other.x >= x + TILE_SIZE &&
+        other.y >= y + TILE_SIZE &&
+        other.x + other.widthTiles * TILE_SIZE <= x + widthTiles * TILE_SIZE - TILE_SIZE &&
+        other.y + other.heightTiles * TILE_SIZE <= y + heightTiles * TILE_SIZE - TILE_SIZE;
+      return !fullyInside;
+    });
+    if (hasCrossingLake || deserts.some(other => rectanglesOverlap(candidate, other, 6))) continue;
 
     deserts.push(candidate);
     usedLakeIds.add(lake.id);
@@ -147,18 +155,28 @@ export function generateAppleTrees(count: number, lakes: Lake[], deserts: Desert
   }
 
   for (const desert of deserts) {
-    const cactusCount = 2 + Math.floor(Math.random() * 2);
-    for (let i = 0; i < cactusCount; i++) {
-      const x = desert.x + (2 + Math.random() * Math.max(1, desert.widthTiles - 4)) * TILE_SIZE;
-      const y = desert.y + (2 + Math.random() * Math.max(1, desert.heightTiles - 4)) * TILE_SIZE;
+    const cactusCount = 3 + Math.floor(Math.random() * 3);
+    let placed = 0;
+    let cactusAttempts = 0;
+    while (placed < cactusCount && cactusAttempts < cactusCount * 12) {
+      cactusAttempts++;
+      const row = 2 + Math.floor(Math.random() * Math.max(1, desert.heightTiles - 4));
+      const span = getDesertRowSpan(desert, row);
+      if (!span || span.endCol - span.startCol < 3) continue;
+      const col = span.startCol + 1 + Math.floor(Math.random() * (span.endCol - span.startCol - 1));
+      const x = desert.x + (col + 0.5) * TILE_SIZE;
+      const y = desert.y + (row + 0.5) * TILE_SIZE;
+      if (lakes.some(lake => isInsideLake(x, y, lake))) continue;
+      if (trees.some(tree => Math.hypot(tree.x - x, tree.y - y) < TILE_SIZE * 3)) continue;
       trees.push({
-        id: `cactus_${desert.id}_${i}`,
+        id: `cactus_${desert.id}_${placed}`,
         x,
         y,
         appleTimer: 0,
         hasApple: false,
         kind: 'cactus',
       });
+      placed++;
     }
   }
   return trees;

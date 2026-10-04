@@ -28,6 +28,7 @@ const SPRITE_MAP: Record<string, string> = {
   desert_grass_vertical: '/sprites/desert_grass_vertical.png',
   desert_grass_horizontal: '/sprites/desert_grass_horizontal.png',
   desert_grass_corner: '/sprites/desert_grass_corner.png',
+  desert_grass_outer_corner: '/sprites/desert_grass_outer_corner.png',
   water_desert_corner: '/sprites/water_desert_corner.png',
   water_desert_side: '/sprites/water_desert_side.png',
   apple_tree:      '/sprites/apple_tree.png',
