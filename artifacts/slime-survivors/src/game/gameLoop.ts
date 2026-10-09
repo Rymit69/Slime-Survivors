@@ -20,6 +20,7 @@ import {
 
 let animationFrameId = 0;
 let lastTime = 0;
+let iceTrailCollisionAccumulator = 0;
 const weapons = createWeapons();
 
 const BASE_MAX_HP = 100;
@@ -74,6 +75,7 @@ export function startGameLoop(
 
   State.status = 'PLAYING';
   State.timeSurvived = 0;
+  iceTrailCollisionAccumulator = 0;
   State.kills = 0;
   State.level = 1;
   State.xp = 0;
@@ -387,8 +389,12 @@ function update(
   }
   if (activeTrailWeapon && (Math.abs(State.player.vx) > 5 || Math.abs(State.player.vy) > 5)) {
     const last = State.trailSegments[State.trailSegments.length - 1];
-    const spacing = Math.max(12, State.player.size * 0.72);
-    if (!last || Math.hypot(last.x - State.player.x, last.y - State.player.y) >= spacing) {
+    const spacing = activeTrailWeapon === 6
+      ? Math.max(18, State.player.size * 0.9)
+      : Math.max(12, State.player.size * 0.72);
+    const dx = last ? last.x - State.player.x : 0;
+    const dy = last ? last.y - State.player.y : 0;
+    if (!last || dx * dx + dy * dy >= spacing * spacing) {
       State.trailSegments.push({
         id: Math.random().toString(),
         x: State.player.x,
@@ -397,6 +403,9 @@ function update(
         age: 0,
         maxAge: getTrailLifetime(State, activeTrailWeapon),
       });
+      if (State.trailSegments.length > 96) {
+        State.trailSegments.splice(0, State.trailSegments.length - 96);
+      }
     }
   }
 
@@ -532,10 +541,24 @@ function update(
   const hasWeb = State.unlockedWeapons.includes(3);
   const webRadius = getStickyWebRadius(State);
   const trailWidth = activeTrailWeapon ? getTrailWidth(State, activeTrailWeapon) : 0;
-  const trailIndex = activeTrailWeapon ? buildTrailIndex(activeTrailWeapon) : new Map<string, TrailSegment[]>();
+  const shouldCheckTrailCollisions = activeTrailWeapon !== 6 || (
+    (iceTrailCollisionAccumulator += dt) >= 0.08
+  );
+  if (shouldCheckTrailCollisions && activeTrailWeapon === 6) {
+    iceTrailCollisionAccumulator %= 0.08;
+  } else if (activeTrailWeapon !== 6) {
+    iceTrailCollisionAccumulator = 0;
+  }
+  const trailIndex = shouldCheckTrailCollisions && activeTrailWeapon &&
+    State.trailSegments.length > 0 && State.enemies.length > 0
+    ? buildTrailIndex(activeTrailWeapon)
+    : null;
   for (let i = State.enemies.length - 1; i >= 0; i--) {
     const e = State.enemies[i];
-    if (activeTrailWeapon) applyTrailEffect(e, activeTrailWeapon, trailIndex, trailWidth);
+    const hasActiveIceEffect = activeTrailWeapon === 6 && (e.frozenTimer > 0 || e.chilledTimer > 0);
+    if (shouldCheckTrailCollisions && activeTrailWeapon && trailIndex && !hasActiveIceEffect) {
+      applyTrailEffect(e, activeTrailWeapon, trailIndex, trailWidth);
+    }
     updateEnemyEffects(e, dt);
     const webSlowed = !e.isFinalBoss && hasWeb &&
       Math.hypot(State.player.x - e.x, State.player.y - e.y) <= webRadius;

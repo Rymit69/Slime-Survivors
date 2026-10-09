@@ -116,36 +116,51 @@ function trailPalette(weaponId: number) {
   return { base: '#2465ad', glow: '#45b9ef', spark: '#bdefff', sprite: 'effect_ice' };
 }
 
-function renderTrail(ctx: CanvasRenderingContext2D, state: GameState) {
+function renderTrail(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  viewLeft: number,
+  viewTop: number,
+  viewRight: number,
+  viewBottom: number,
+) {
   const weaponId = getTrailWeaponId(state);
   if (!weaponId || state.trailSegments.length === 0) return;
   const palette = trailPalette(weaponId);
   const width = getTrailWidth(state, weaponId);
-  // Avoid spending a frame on stale trail points after a long movement burst.
+  const effectSize = Math.max(14, Math.min(21, width * 0.9));
+  const padding = effectSize;
   const points = state.trailSegments.slice(-72);
+  if (points.length === 0) return;
 
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  // Wider and denser than the previous version, but still a compact trail.
-  ctx.globalAlpha = 0.68;
+  ctx.globalAlpha = 0.58;
   ctx.strokeStyle = palette.glow;
-  ctx.lineWidth = Math.max(5, width * 0.52);
-  ctx.filter = 'saturate(1.7) contrast(1.3)';
+  ctx.lineWidth = Math.max(4, width * 0.38);
   ctx.beginPath();
-  points.forEach((segment, index) => {
-    if (index === 0) ctx.moveTo(segment.x, segment.y);
-    else ctx.lineTo(segment.x, segment.y);
-  });
-  ctx.stroke();
-
   for (let index = 0; index < points.length; index++) {
     const segment = points[index];
+    if (index === 0) ctx.moveTo(segment.x, segment.y);
+    else ctx.lineTo(segment.x, segment.y);
+  }
+  ctx.stroke();
+
+  // The continuous stroke keeps the trail readable; fewer sprite stamps avoid
+  // dozens of extra filtered draw calls per frame on mobile GPUs.
+  const stampStride = weaponId === 6 ? 3 : 2;
+  for (let index = 0; index < points.length; index++) {
+    if (index % stampStride !== 0 && index !== points.length - 1) continue;
+    const segment = points[index];
+    if (
+      segment.x < viewLeft - padding ||
+      segment.x > viewRight + padding ||
+      segment.y < viewTop - padding ||
+      segment.y > viewBottom + padding
+    ) continue;
     const alpha = Math.max(0.24, 1 - segment.age / segment.maxAge);
-    // Static pixel-art stamps are cheaper than animated particles and remain
-    // visible on the road even on slower mobile devices.
-    const effectSize = Math.max(14, Math.min(21, width * 0.9));
-    drawEffectStamp(ctx, palette.sprite, segment.x, segment.y, effectSize, Math.min(1, alpha * 1.15));
+    drawEffectStamp(ctx, palette.sprite, segment.x, segment.y, effectSize, Math.min(0.85, alpha));
   }
   ctx.restore();
 }
@@ -177,15 +192,9 @@ function renderEnemyStatusFx(ctx: CanvasRenderingContext2D, enemy: GameState['en
   }
   if (enemy.frozenTimer > 0 || enemy.chilledTimer > 0) {
     ctx.save();
-    ctx.filter = 'saturate(1.8) contrast(1.35)';
-    const iceRadius = enemy.size * 0.95;
-    const iceOffsets = [
-      [-1, 0], [-0.5, -0.9], [0.5, -0.9],
-      [1, 0], [0.5, 0.9], [-0.5, 0.9],
-    ];
-    for (const [ox, oy] of iceOffsets) {
-      drawEffectStamp(ctx, 'effect_ice', enemy.x + ox * iceRadius, enemy.y + oy * iceRadius, 18, 0.95);
-    }
+    const iceSize = Math.max(18, Math.min(28, enemy.size * 1.2));
+    const iceAlpha = enemy.frozenTimer > 0 ? 0.9 : 0.58;
+    drawEffectStamp(ctx, 'effect_ice', enemy.x, enemy.y - enemy.size * 0.45, iceSize, iceAlpha);
     ctx.restore();
   }
 }
@@ -307,10 +316,19 @@ function renderDesert(
       const east = col < span.endCol;
       const north = aboveSpan !== null && col >= aboveSpan.startCol && col <= aboveSpan.endCol;
       const south = belowSpan !== null && col >= belowSpan.startCol && col <= belowSpan.endCol;
+      const northwest = aboveSpan !== null && col - 1 >= aboveSpan.startCol && col - 1 <= aboveSpan.endCol;
+      const northeast = aboveSpan !== null && col + 1 >= aboveSpan.startCol && col + 1 <= aboveSpan.endCol;
+      const southwest = belowSpan !== null && col - 1 >= belowSpan.startCol && col - 1 <= belowSpan.endCol;
+      const southeast = belowSpan !== null && col + 1 >= belowSpan.startCol && col + 1 <= belowSpan.endCol;
 
       // Neighbor-based edges preserve the chunky staircase instead of drawing
-      // a continuous diagonal around the whole biome.
-      if (!north && !west) drawTile(ctx, 'desert_grass_outer_corner', x, y);
+      // a continuous diagonal around the whole biome. Concave notches use the
+      // original corner tile; convex corners keep the newer outer-corner tile.
+      if (north && west && !northwest) drawTile(ctx, 'desert_grass_corner', x, y, Math.PI);
+      else if (north && east && !northeast) drawTile(ctx, 'desert_grass_corner', x, y, -Math.PI / 2);
+      else if (south && east && !southeast) drawTile(ctx, 'desert_grass_corner', x, y);
+      else if (south && west && !southwest) drawTile(ctx, 'desert_grass_corner', x, y, Math.PI / 2);
+      else if (!north && !west) drawTile(ctx, 'desert_grass_outer_corner', x, y);
       else if (!north && !east) drawTile(ctx, 'desert_grass_outer_corner', x, y, Math.PI / 2);
       else if (!south && !east) drawTile(ctx, 'desert_grass_outer_corner', x, y, Math.PI);
       else if (!south && !west) drawTile(ctx, 'desert_grass_outer_corner', x, y, -Math.PI / 2);
@@ -437,7 +455,14 @@ export function render(
   }
 
   // ── 4b. Elemental trail ─────────────────────────────────────────────────────
-  renderTrail(ctx, state);
+  renderTrail(
+    ctx,
+    state,
+    state.camera.x - halfW - S,
+    state.camera.y - halfH - S,
+    state.camera.x + halfW + S,
+    state.camera.y + halfH + S,
+  );
 
   // ── 5. Fruit on ground ──────────────────────────────────────────────────────
   for (const apple of state.apples) {

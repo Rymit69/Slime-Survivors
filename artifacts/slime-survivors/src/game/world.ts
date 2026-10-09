@@ -71,12 +71,12 @@ function randomIntInclusive(min: number, max: number): number {
 function createSteppedDesertRowSpans(widthTiles: number, heightTiles: number) {
   const makeSideProfile = () => {
     const profile = new Array<number>(heightTiles);
-    const topSteps = randomIntInclusive(3, 7);
-    const bottomSteps = randomIntInclusive(3, 7);
+    const topSteps = randomIntInclusive(2, 5);
+    const bottomSteps = randomIntInclusive(2, 5);
     const topRows = topSteps * 2 + 1;
     const bottomRows = bottomSteps * 2 + 1;
     let inset = 0;
-    let nextStepAt = topRows + randomIntInclusive(2, 5);
+    let nextStepAt = topRows + randomIntInclusive(1, 3);
 
     for (let row = 0; row < heightTiles; row++) {
       if (row < topRows) {
@@ -86,10 +86,15 @@ function createSteppedDesertRowSpans(widthTiles: number, heightTiles: number) {
         inset = Math.max(0, bottomSteps - Math.floor(rowsFromBottom / 2));
       } else if (row === topRows) {
         inset = 0;
-        nextStepAt = row + randomIntInclusive(2, 5);
+        nextStepAt = row + randomIntInclusive(1, 3);
       } else if (row >= nextStepAt) {
-        inset = Math.max(0, Math.min(10, inset + randomIntInclusive(-2, 2)));
-        nextStepAt = row + randomIntInclusive(2, 5);
+        const direction = Math.random() < 0.5 ? -1 : 1;
+        const step = Math.random() < 0.12 ? 2 : 1;
+        const proposedInset = inset + direction * step;
+        inset = proposedInset < 0 || proposedInset > 7
+          ? Math.max(0, Math.min(7, inset - direction * step))
+          : proposedInset;
+        nextStepAt = row + randomIntInclusive(1, 3);
       }
       profile[row] = inset;
     }
