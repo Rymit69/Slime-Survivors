@@ -63,13 +63,52 @@ export function isInsideLake(px: number, py: number, lake: Lake): boolean {
   );
 }
 
-/** Tile span for one row of the chamfered desert shape. */
+function randomIntInclusive(min: number, max: number): number {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+/** Build a pixel-stepped desert edge with short horizontal runs and uneven offsets. */
+function createSteppedDesertRowSpans(widthTiles: number, heightTiles: number) {
+  const makeSideProfile = () => {
+    const profile = new Array<number>(heightTiles);
+    const topSteps = randomIntInclusive(3, 7);
+    const bottomSteps = randomIntInclusive(3, 7);
+    const topRows = topSteps * 2 + 1;
+    const bottomRows = bottomSteps * 2 + 1;
+    let inset = 0;
+    let nextStepAt = topRows + randomIntInclusive(2, 5);
+
+    for (let row = 0; row < heightTiles; row++) {
+      if (row < topRows) {
+        inset = Math.max(0, topSteps - Math.floor(row / 2));
+      } else if (row >= heightTiles - bottomRows) {
+        const rowsFromBottom = heightTiles - 1 - row;
+        inset = Math.max(0, bottomSteps - Math.floor(rowsFromBottom / 2));
+      } else if (row === topRows) {
+        inset = 0;
+        nextStepAt = row + randomIntInclusive(2, 5);
+      } else if (row >= nextStepAt) {
+        inset = Math.max(0, Math.min(10, inset + randomIntInclusive(-2, 2)));
+        nextStepAt = row + randomIntInclusive(2, 5);
+      }
+      profile[row] = inset;
+    }
+
+    return profile;
+  };
+
+  const leftInsets = makeSideProfile();
+  const rightInsets = makeSideProfile();
+  return Array.from({ length: heightTiles }, (_, row) => ({
+    startCol: leftInsets[row],
+    endCol: widthTiles - 1 - rightInsets[row],
+  }));
+}
+
+/** Tile span for one row of the stepped desert shape. */
 export function getDesertRowSpan(desert: DesertBiome, row: number) {
   if (row < 0 || row >= desert.heightTiles) return null;
-  const fromTop = Math.max(0, desert.cornerCutTiles - row);
-  const fromBottom = Math.max(0, desert.cornerCutTiles - (desert.heightTiles - 1 - row));
-  const inset = Math.max(fromTop, fromBottom);
-  return { startCol: inset, endCol: desert.widthTiles - 1 - inset };
+  return desert.rowSpans[row] ?? null;
 }
 
 /** True when a world-space point belongs to the chamfered desert shape. */
@@ -87,51 +126,91 @@ export function isInsideDesert(px: number, py: number, desert: DesertBiome): boo
 }
 
 /**
- * Generate rare, large desert patches around lakes so each biome includes a
- * lake and uses the authored water/sand transition tiles on its shoreline.
+ * Generate large, separate desert patches across the world. A small number
+ * are centered on lakes; all remaining patches are placed away from water.
  */
-export function generateDesertBiomes(lakes: Lake[], count = 2): DesertBiome[] {
+export function generateDesertBiomes(
+  lakes: Lake[],
+  count = 10 + Math.floor(Math.random() * 16),
+): DesertBiome[] {
+  const targetCount = Math.max(0, Math.floor(count));
   const deserts: DesertBiome[] = [];
   const usedLakeIds = new Set<string>();
+  const lakeDesertTarget = lakes.length === 0 || targetCount === 0
+    ? 0
+    : Math.min(2, Math.max(1, Math.floor(targetCount / 10)), lakes.length);
+  const anchorAttemptLimit = Math.max(120, lakes.length * 12);
+  const spreadRadius = 6500;
+  let lakeAttempts = 0;
   let attempts = 0;
 
-  while (deserts.length < count && attempts < count * 60) {
-    attempts++;
-    const lake = lakes[Math.floor(Math.random() * lakes.length)];
-    if (!lake || usedLakeIds.has(lake.id)) continue;
+  const lakeFitsInside = (lake: Lake, desert: DesertBiome) => {
+    const left = lake.x + TILE_SIZE / 2;
+    const right = lake.x + lake.widthTiles * TILE_SIZE - TILE_SIZE / 2;
+    const top = lake.y + TILE_SIZE / 2;
+    const bottom = lake.y + lake.heightTiles * TILE_SIZE - TILE_SIZE / 2;
+    return [
+      [left, top],
+      [right, top],
+      [left, bottom],
+      [right, bottom],
+    ].every(([x, y]) => isInsideDesert(x, y, desert));
+  };
 
-    const widthTiles = 36 + Math.floor(Math.random() * 9);
-    const heightTiles = 24 + Math.floor(Math.random() * 7);
-    const cornerCutTiles = 5 + Math.floor(Math.random() * 3);
-    const lakeCenterX = lake.x + lake.widthTiles * TILE_SIZE / 2;
-    const lakeCenterY = lake.y + lake.heightTiles * TILE_SIZE / 2;
-    // Center the lake inside a distinctly wider-than-tall desert patch.
-    const x = Math.round((lakeCenterX - widthTiles * TILE_SIZE / 2) / TILE_SIZE) * TILE_SIZE;
-    const y = Math.round((lakeCenterY - heightTiles * TILE_SIZE / 2) / TILE_SIZE) * TILE_SIZE;
+  const isValidCandidate = (candidate: DesertBiome, anchorLake: Lake | null) => {
+    const nearestX = Math.max(candidate.x, Math.min(0, candidate.x + candidate.widthTiles * TILE_SIZE));
+    const nearestY = Math.max(candidate.y, Math.min(0, candidate.y + candidate.heightTiles * TILE_SIZE));
+    if (Math.hypot(nearestX, nearestY) < 900) return false;
+    if (deserts.some(other => rectanglesOverlap(candidate, other, 4))) return false;
+
+    const intersectingLakes = lakes.filter(lake => rectanglesOverlap(candidate, lake));
+    if (!anchorLake) return intersectingLakes.length === 0;
+    if (usedLakeIds.has(anchorLake.id) || !lakeFitsInside(anchorLake, candidate)) return false;
+    return intersectingLakes.every(lake => lakeFitsInside(lake, candidate));
+  };
+
+  while (deserts.length < targetCount && attempts < Math.max(3000, targetCount * 1000)) {
+    attempts++;
+    const widthTiles = randomIntInclusive(54, 64);
+    const heightTiles = randomIntInclusive(38, 46);
+    const rowSpans = createSteppedDesertRowSpans(widthTiles, heightTiles);
+    const shouldTryLake = usedLakeIds.size < lakeDesertTarget && lakeAttempts < anchorAttemptLimit;
+    let anchorLake: Lake | null = null;
+
+    if (shouldTryLake) {
+      lakeAttempts++;
+      const availableLakes = lakes.filter(lake => !usedLakeIds.has(lake.id));
+      if (availableLakes.length > 0) {
+        anchorLake = availableLakes[Math.floor(Math.random() * availableLakes.length)];
+      }
+    }
+
+    let x: number;
+    let y: number;
+    if (anchorLake) {
+      const centerX = anchorLake.x + anchorLake.widthTiles * TILE_SIZE / 2;
+      const centerY = anchorLake.y + anchorLake.heightTiles * TILE_SIZE / 2;
+      x = Math.round((centerX - widthTiles * TILE_SIZE / 2) / TILE_SIZE) * TILE_SIZE;
+      y = Math.round((centerY - heightTiles * TILE_SIZE / 2) / TILE_SIZE) * TILE_SIZE;
+    } else {
+      const centerX = (Math.random() - 0.5) * spreadRadius * 2;
+      const centerY = (Math.random() - 0.5) * spreadRadius * 2;
+      x = Math.round((centerX - widthTiles * TILE_SIZE / 2) / TILE_SIZE) * TILE_SIZE;
+      y = Math.round((centerY - heightTiles * TILE_SIZE / 2) / TILE_SIZE) * TILE_SIZE;
+    }
+
     const candidate: DesertBiome = {
       id: `desert_${deserts.length}`,
       x,
       y,
       widthTiles,
       heightTiles,
-      cornerCutTiles,
+      rowSpans,
     };
-    const centerX = x + widthTiles * TILE_SIZE / 2;
-    const centerY = y + heightTiles * TILE_SIZE / 2;
-    if (Math.hypot(centerX, centerY) < 800) continue;
-
-    const hasCrossingLake = lakes.some(other => {
-      if (other.id === lake.id || !rectanglesOverlap(candidate, other)) return false;
-      const fullyInside = other.x >= x + TILE_SIZE &&
-        other.y >= y + TILE_SIZE &&
-        other.x + other.widthTiles * TILE_SIZE <= x + widthTiles * TILE_SIZE - TILE_SIZE &&
-        other.y + other.heightTiles * TILE_SIZE <= y + heightTiles * TILE_SIZE - TILE_SIZE;
-      return !fullyInside;
-    });
-    if (hasCrossingLake || deserts.some(other => rectanglesOverlap(candidate, other, 6))) continue;
+    if (!isValidCandidate(candidate, anchorLake)) continue;
 
     deserts.push(candidate);
-    usedLakeIds.add(lake.id);
+    if (anchorLake) usedLakeIds.add(anchorLake.id);
   }
 
   return deserts;

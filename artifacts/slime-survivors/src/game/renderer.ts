@@ -297,31 +297,29 @@ function renderDesert(
     const startCol = Math.max(firstCol, span.startCol);
     const endCol = Math.min(lastCol, span.endCol);
     if (startCol > endCol) continue;
+    const aboveSpan = getDesertRowSpan(desert, row - 1);
+    const belowSpan = getDesertRowSpan(desert, row + 1);
 
     for (let col = startCol; col <= endCol; col++) {
       const x = desert.x + col * TILE_SIZE;
       const y = desert.y + row * TILE_SIZE;
-      const left = col === span.startCol;
-      const right = col === span.endCol;
-      const top = row === 0;
-      const bottom = row === desert.heightTiles - 1;
-      const bevel = desert.cornerCutTiles;
-      const upperLeftBevel = left && row < bevel;
-      const upperRightBevel = right && row < bevel;
-      const lowerRightBevel = right && desert.heightTiles - 1 - row < bevel;
-      const lowerLeftBevel = left && desert.heightTiles - 1 - row < bevel;
+      const west = col > span.startCol;
+      const east = col < span.endCol;
+      const north = aboveSpan !== null && col >= aboveSpan.startCol && col <= aboveSpan.endCol;
+      const south = belowSpan !== null && col >= belowSpan.startCol && col <= belowSpan.endCol;
 
-      if (upperLeftBevel) drawTile(ctx, 'desert_grass_outer_corner', x, y);
-      else if (upperRightBevel) drawTile(ctx, 'desert_grass_outer_corner', x, y, Math.PI / 2);
-      else if (lowerRightBevel) drawTile(ctx, 'desert_grass_outer_corner', x, y, Math.PI);
-      else if (lowerLeftBevel) drawTile(ctx, 'desert_grass_outer_corner', x, y, -Math.PI / 2);
-      // The supplied vertical tile has sand on its left and grass on its
-      // right; reflect it on the desert's western edge.
-      else if (left) drawTile(ctx, 'desert_grass_vertical', x, y, 0, true);
-      else if (right) drawTile(ctx, 'desert_grass_vertical', x, y);
-      // The supplied horizontal tile has sand above grass.
-      else if (top) drawTile(ctx, 'desert_grass_horizontal', x, y, Math.PI);
-      else if (bottom) drawTile(ctx, 'desert_grass_horizontal', x, y);
+      // Neighbor-based edges preserve the chunky staircase instead of drawing
+      // a continuous diagonal around the whole biome.
+      if (!north && !west) drawTile(ctx, 'desert_grass_outer_corner', x, y);
+      else if (!north && !east) drawTile(ctx, 'desert_grass_outer_corner', x, y, Math.PI / 2);
+      else if (!south && !east) drawTile(ctx, 'desert_grass_outer_corner', x, y, Math.PI);
+      else if (!south && !west) drawTile(ctx, 'desert_grass_outer_corner', x, y, -Math.PI / 2);
+      // The vertical tile has sand on its left and grass on its right.
+      else if (!west) drawTile(ctx, 'desert_grass_vertical', x, y, 0, true);
+      else if (!east) drawTile(ctx, 'desert_grass_vertical', x, y);
+      // The horizontal tile has sand above grass.
+      else if (!north) drawTile(ctx, 'desert_grass_horizontal', x, y, Math.PI);
+      else if (!south) drawTile(ctx, 'desert_grass_horizontal', x, y);
       else drawTile(ctx, 'desert', x, y);
     }
   }
