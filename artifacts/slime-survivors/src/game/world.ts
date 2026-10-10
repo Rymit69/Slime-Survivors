@@ -67,6 +67,44 @@ function randomIntInclusive(min: number, max: number): number {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+/** Vary the north/south silhouette across columns so the top and bottom do not stay flat. */
+function createHorizontalEdgeProfile(widthTiles: number) {
+  const maxInset = randomIntInclusive(3, 6);
+  const ridgeWidth = randomIntInclusive(7, 15);
+  const ridgeStart = randomIntInclusive(8, widthTiles - 8 - ridgeWidth);
+  const ridgeEnd = ridgeStart + ridgeWidth - 1;
+  const profile = new Array<number>(widthTiles);
+
+  for (let col = ridgeStart; col <= ridgeEnd; col++) {
+    profile[col] = randomIntInclusive(0, 1);
+  }
+  const coreWidth = randomIntInclusive(4, Math.min(8, ridgeWidth));
+  const coreStart = randomIntInclusive(ridgeStart, ridgeEnd - coreWidth + 1);
+  for (let col = coreStart; col < coreStart + coreWidth; col++) {
+    profile[col] = 0;
+  }
+
+  const extendSlope = (startCol: number, endCol: number, direction: -1 | 1) => {
+    let inset = randomIntInclusive(1, 2);
+    let distance = 0;
+    let nextStepAt = randomIntInclusive(2, 4);
+
+    for (let col = startCol; direction < 0 ? col >= endCol : col <= endCol; col += direction) {
+      if (distance >= nextStepAt && inset < maxInset) {
+        const increase = Math.random() < 0.18 ? 2 : Math.random() < 0.35 ? 0 : 1;
+        inset = Math.min(maxInset, inset + increase);
+        nextStepAt = distance + randomIntInclusive(2, 5);
+      }
+      profile[col] = inset;
+      distance++;
+    }
+  };
+
+  extendSlope(ridgeStart - 1, 0, -1);
+  extendSlope(ridgeEnd + 1, widthTiles - 1, 1);
+  return profile;
+}
+
 /** Build a pixel-stepped desert edge with short horizontal runs and uneven offsets. */
 function createSteppedDesertRowSpans(widthTiles: number, heightTiles: number) {
   const makeSideProfile = () => {
@@ -104,10 +142,19 @@ function createSteppedDesertRowSpans(widthTiles: number, heightTiles: number) {
 
   const leftInsets = makeSideProfile();
   const rightInsets = makeSideProfile();
-  return Array.from({ length: heightTiles }, (_, row) => ({
-    startCol: leftInsets[row],
-    endCol: widthTiles - 1 - rightInsets[row],
-  }));
+  const topInsets = createHorizontalEdgeProfile(widthTiles);
+  const bottomInsets = createHorizontalEdgeProfile(widthTiles);
+
+  return Array.from({ length: heightTiles }, (_, row) => {
+    let startCol = leftInsets[row];
+    let endCol = widthTiles - 1 - rightInsets[row];
+    const isInsideHorizontalEdges = (col: number) =>
+      row >= topInsets[col] && row < heightTiles - bottomInsets[col];
+
+    while (startCol <= endCol && !isInsideHorizontalEdges(startCol)) startCol++;
+    while (endCol >= startCol && !isInsideHorizontalEdges(endCol)) endCol--;
+    return { startCol, endCol };
+  });
 }
 
 /** Tile span for one row of the stepped desert shape. */
